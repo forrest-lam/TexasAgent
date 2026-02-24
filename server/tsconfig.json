@@ -6,7 +6,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "noImplicitAny": false,
-    "noEmit": true,
+    "noEmit": false,
     "paths": {
       "@texas-agent/shared": ["../shared/src"],
       "@texas-agent/shared/*": ["../shared/src/*"]
