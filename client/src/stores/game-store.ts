@@ -25,13 +25,13 @@ interface GameStore {
 export const useGameStore = create<GameStore>((set, get) => ({
   gameState: null,
   isMyTurn: false,
-  timeLimit: 30000,
+  timeLimit: 60000,
   myPlayerId: '',
   gameLog: [],
 
   setGameState: (state: GameState) => {
     const myId = get().myPlayerId;
-    const isMyTurn = state.players[state.currentPlayerIndex]?.id === myId;
+    const isMyTurn = state.phase !== 'showdown' && state.players[state.currentPlayerIndex]?.id === myId;
     set({ gameState: state, isMyTurn });
   },
 

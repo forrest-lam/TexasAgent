@@ -11,14 +11,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { motion } from 'framer-motion';
 import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff, Settings, LogOut, Coins } from 'lucide-react';
 import { useI18n } from '../i18n';
-import LanguageSwitch from '../components/controls/LanguageSwitch';
+import { LanguageSwitch } from '../components/controls/LanguageSwitch';
 import SoundToggle from '../components/controls/SoundToggle';
 import { playSound } from '../services/sound-service';
 import { useAuthStore } from '../stores/auth-store';
 
 export default function Lobby() {
   const navigate = useNavigate();
-  const { rooms, currentRoom, isConnected, connect, createRoom, joinRoom, addAI, startGame } = useLobbyStore();
+  const { rooms, currentRoom, isConnected, isSpectating, connect, createRoom, joinRoom, spectateRoom, addAI, startGame } = useLobbyStore();
   const { t } = useI18n();
   const { user, logout } = useAuthStore();
 
@@ -32,7 +32,7 @@ export default function Lobby() {
     if (currentRoom?.status === 'playing') {
       navigate(`/game/${currentRoom.id}`);
     }
-  }, [currentRoom?.status]);
+  }, [currentRoom?.status, isSpectating]);
 
   const handleCreateRoom = () => {
     const name = roomName || `${user?.username}'s Room`;
@@ -63,19 +63,19 @@ export default function Lobby() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(27,94,32,0.08)_0%,transparent_60%)]" />
 
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 bg-casino-bg/80 backdrop-blur-md border-b border-casino-border/30">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center shadow-lg">
-            <span className="text-xl">♠</span>
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-3 py-2 sm:px-6 sm:py-4 bg-casino-bg/80 backdrop-blur-md border-b border-casino-border/30">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center shadow-lg">
+            <span className="text-base sm:text-xl">♠</span>
           </div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-lg sm:text-2xl font-bold text-white">
             Texas<span className="text-gold-400">Agent</span>
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           <LanguageSwitch />
           <SoundToggle />
-          <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2">
             {isConnected ? (
               <Wifi size={14} className="text-green-400" />
             ) : (
@@ -83,11 +83,11 @@ export default function Lobby() {
             )}
             <span className="text-xs text-gray-400">{isConnected ? t('lobby.online') : t('lobby.offline')}</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg">
-            <Coins size={14} className="text-yellow-400" />
-            <span className="text-sm font-medium text-yellow-400">{user?.chips?.toLocaleString()}</span>
+          <div className="flex items-center gap-1 sm:gap-2 px-2 py-1 sm:px-3 sm:py-1.5 bg-white/5 rounded-lg">
+            <Coins size={12} className="text-yellow-400 sm:w-3.5 sm:h-3.5" />
+            <span className="text-xs sm:text-sm font-medium text-yellow-400">{user?.chips?.toLocaleString()}</span>
           </div>
-          <span className="text-sm text-white font-medium">{user?.username}</span>
+          <span className="hidden sm:inline text-sm text-white font-medium">{user?.username}</span>
           <button onClick={() => navigate('/settings')} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors" title={t('settings.title')}>
             <Settings size={16} className="text-gray-400 hover:text-white" />
           </button>
@@ -98,25 +98,26 @@ export default function Lobby() {
       </header>
 
       {/* Main content */}
-      <main className="pt-24 px-6 max-w-5xl mx-auto relative z-10">
+      <main className="pt-16 sm:pt-24 px-3 sm:px-6 max-w-5xl mx-auto relative z-10 pb-6">
         {/* Mode selection */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-8 sm:mb-12">
           {/* Single Player */}
           <motion.div
             whileHover={{ y: -4, boxShadow: '0 0 30px rgba(212,175,55,0.15)' }}
-            className="glass-card rounded-2xl p-8 cursor-pointer group transition-all"
+            className="glass-card rounded-2xl p-5 sm:p-8 cursor-pointer group transition-all"
             onClick={handleSinglePlayer}
           >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-gold-400/20 to-gold-600/20 flex items-center justify-center border border-gold-500/20">
-                <Gamepad2 size={28} className="text-gold-400" />
+            <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+              <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-gold-400/20 to-gold-600/20 flex items-center justify-center border border-gold-500/20 shrink-0">
+                <Gamepad2 size={24} className="text-gold-400 sm:hidden" />
+                <Gamepad2 size={28} className="text-gold-400 hidden sm:block" />
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-white group-hover:text-gold-400 transition-colors">{t('lobby.singlePlayer')}</h2>
-                <p className="text-sm text-gray-400">{t('lobby.singlePlayerDesc')}</p>
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl font-bold text-white group-hover:text-gold-400 transition-colors">{t('lobby.singlePlayer')}</h2>
+                <p className="text-xs sm:text-sm text-gray-400">{t('lobby.singlePlayerDesc')}</p>
               </div>
             </div>
-            <p className="text-sm text-gray-500 leading-relaxed">
+            <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
               {t('lobby.singlePlayerDetail')}
             </p>
           </motion.div>
@@ -124,19 +125,20 @@ export default function Lobby() {
           {/* Multiplayer */}
           <motion.div
             whileHover={{ y: -4, boxShadow: '0 0 30px rgba(59,130,246,0.15)' }}
-            className="glass-card rounded-2xl p-8 cursor-pointer group transition-all"
+            className="glass-card rounded-2xl p-5 sm:p-8 cursor-pointer group transition-all"
             onClick={() => setShowCreate(true)}
           >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-700/20 flex items-center justify-center border border-blue-500/20">
-                <Users size={28} className="text-blue-400" />
+            <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+              <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-700/20 flex items-center justify-center border border-blue-500/20 shrink-0">
+                <Users size={24} className="text-blue-400 sm:hidden" />
+                <Users size={28} className="text-blue-400 hidden sm:block" />
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">{t('lobby.multiplayer')}</h2>
-                <p className="text-sm text-gray-400">{t('lobby.multiplayerDesc')}</p>
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl font-bold text-white group-hover:text-blue-400 transition-colors">{t('lobby.multiplayer')}</h2>
+                <p className="text-xs sm:text-sm text-gray-400">{t('lobby.multiplayerDesc')}</p>
               </div>
             </div>
-            <p className="text-sm text-gray-500 leading-relaxed">
+            <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
               {t('lobby.multiplayerDetail')}
             </p>
           </motion.div>
@@ -152,7 +154,7 @@ export default function Lobby() {
                   key={room.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="glass-card rounded-xl p-4 flex items-center justify-between"
+                  className="glass-card rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0 sm:justify-between"
                 >
                   <div>
                     <h4 className="text-sm font-semibold text-white">{room.name}</h4>
@@ -164,14 +166,23 @@ export default function Lobby() {
                     <span className={`px-2 py-0.5 text-xs rounded-full ${room.status === 'playing' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
                       {room.status === 'playing' ? t('lobby.inGame') : t('lobby.waiting')}
                     </span>
-                    <Button
-                      onClick={() => joinRoom(room.id)}
-                      disabled={room.status === 'playing'}
-                      size="sm"
-                      className="bg-gold-500 text-black hover:bg-gold-400 disabled:opacity-50 cursor-pointer"
-                    >
-                      <LogIn size={14} className="mr-1" /> {t('lobby.join')}
-                    </Button>
+                    {room.status === 'playing' ? (
+                      <Button
+                        onClick={() => spectateRoom(room.id)}
+                        size="sm"
+                        className="bg-purple-600 text-white hover:bg-purple-500 cursor-pointer"
+                      >
+                        <LogIn size={14} className="mr-1" /> {t('lobby.spectate')}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => joinRoom(room.id)}
+                        size="sm"
+                        className="bg-gold-500 text-black hover:bg-gold-400 cursor-pointer"
+                      >
+                        <LogIn size={14} className="mr-1" /> {t('lobby.join')}
+                      </Button>
+                    )}
                   </div>
                 </motion.div>
               ))}
@@ -253,9 +264,9 @@ function RoomWaitingScreen({ room, onAddAI, onStart, onLeave }: {
 }) {
   const { t } = useI18n();
   return (
-    <div className="min-h-screen bg-casino-bg flex flex-col items-center justify-center px-4">
-      <div className="glass-card rounded-2xl p-8 max-w-lg w-full space-y-6">
-        <h2 className="text-2xl font-bold text-white text-center">{room.name}</h2>
+    <div className="min-h-screen bg-casino-bg flex flex-col items-center justify-center px-3 sm:px-4">
+      <div className="glass-card rounded-2xl p-5 sm:p-8 max-w-lg w-full space-y-4 sm:space-y-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-white text-center">{room.name}</h2>
         <p className="text-center text-gray-400 text-sm">
           {room.players.length}/{room.config.maxPlayers} {t('lobby.players')} · {t('lobby.blinds')} {room.config.smallBlind}/{room.config.bigBlind}
         </p>

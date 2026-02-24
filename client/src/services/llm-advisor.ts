@@ -93,7 +93,7 @@ function buildPrompt(state: GameState, myPlayerId: string): string {
   const stackToPot = state.pot > 0 ? (me.chips / state.pot).toFixed(1) : '∞';
 
   // Rich player behavioral data
-  const playerMemory = getProfileSummaryForLLM(myPlayerId);
+  const playerMemory = getProfileSummaryForLLM(myPlayerId, me.name);
 
   return `## Current Hand State
 - **Phase**: ${state.phase}

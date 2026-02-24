@@ -74,6 +74,8 @@ export interface Room {
   name: string;
   config: RoomConfig;
   players: Player[];
+  /** Players waiting to join at the start of the next hand */
+  pendingPlayers?: Player[];
   gameState?: GameState;
   status: 'waiting' | 'playing';
   createdAt: number;
@@ -156,6 +158,9 @@ export interface ServerToClientEvents {
   'room:joined': (room: Room) => void;
   'room:left': () => void;
   'room:updated': (room: Room) => void;
+  'room:spectating': (room: Room) => void;
+  'room:seated': () => void;
+  'room:stood-up': () => void;
   'game:state': (state: GameState) => void;
   'game:started': (state: GameState) => void;
   'game:action': (data: { playerId: string; action: PlayerAction }) => void;
@@ -169,8 +174,12 @@ export interface ClientToServerEvents {
   'room:list': () => void;
   'room:create': (config: RoomConfig & { name: string }) => void;
   'room:join': (roomId: string) => void;
+  'room:spectate': (roomId: string) => void;
+  'room:sit': () => void;
+  'room:stand': () => void;
   'room:leave': () => void;
   'room:add-ai': (personality: AIPersonality, engineType: AIEngineType) => void;
   'game:start': () => void;
   'game:action': (action: PlayerAction) => void;
+  'game:resync': () => void;
 }

@@ -17,10 +17,28 @@ export class GameController {
   private actionTimer: ReturnType<typeof setTimeout> | null = null;
   private emitEvent: GameEventCallback;
   private isProcessing = false;
+  /** Players who timed out this hand — will be kicked before the next hand */
+  private timedOutPlayers: Set<string> = new Set();
+  /** Players who chose to stand up — will be removed from players list before the next hand */
+  private standingPlayers: Set<string> = new Set();
+  /** Callback to notify socket-handler to kick a player from the room */
+  private onPlayerKick?: (playerId: string) => void;
+  /** Callback to notify socket-handler the room should be destroyed (only AI left) */
+  private onRoomEmpty?: () => void;
 
   constructor(room: Room, emitEvent: GameEventCallback) {
     this.room = room;
     this.emitEvent = emitEvent;
+  }
+
+  /** Register a callback that will be called to kick timed-out players from the room */
+  setOnPlayerKick(cb: (playerId: string) => void): void {
+    this.onPlayerKick = cb;
+  }
+
+  /** Register a callback that will be called when only AI players remain in the room */
+  setOnRoomEmpty(cb: () => void): void {
+    this.onRoomEmpty = cb;
   }
 
   startGame(): GameState {
@@ -78,9 +96,62 @@ export class GameController {
     this.processAction(playerId, action);
   }
 
+  /** Handle a human player leaving mid-game: mark them as folded & inactive */
+  handlePlayerLeave(playerId: string): void {
+    const state = this.room.gameState;
+    if (!state || state.phase === 'waiting' || state.phase === 'showdown') return;
+
+    const player = state.players.find(p => p.id === playerId);
+    if (!player || player.isFolded || !player.isActive) return;
+
+    // Mark player as folded and inactive
+    player.isFolded = true;
+    player.isActive = false;
+
+    // If it was this player's turn, clear the timer and advance the game
+    const currentPlayer = state.players[state.currentPlayerIndex];
+    if (currentPlayer && currentPlayer.id === playerId) {
+      this.clearActionTimer();
+      // Broadcast the fold action
+      this.emitEvent(this.room.id, 'game:action', { playerId, action: { type: 'fold' } });
+
+      // Check if only one player remains
+      const inHand = getPlayersInHand(state);
+      if (inHand.length <= 1) {
+        this.finishHand(state);
+      } else {
+        // Move to next player
+        state.currentPlayerIndex = getNextActivePlayerIndex(state, state.currentPlayerIndex);
+        if (state.currentPlayerIndex === -1) {
+          this.finishHand(state);
+        } else {
+          this.broadcastState(state);
+          this.scheduleNextAction(state);
+        }
+      }
+    } else {
+      // Not their turn — just broadcast updated state
+      this.emitEvent(this.room.id, 'game:action', { playerId, action: { type: 'fold' } });
+
+      // Check if only one player remains after the fold
+      const inHand = getPlayersInHand(state);
+      if (inHand.length <= 1) {
+        this.clearActionTimer();
+        this.finishHand(state);
+      } else {
+        this.broadcastState(state);
+      }
+    }
+  }
+
   cleanup(): void {
     this.clearActionTimer();
     this.aiPlayers.clear();
+  }
+
+  /** Mark a player as standing up — they will be removed before the next hand */
+  handlePlayerStand(playerId: string): void {
+    this.standingPlayers.add(playerId);
   }
 
   getState(): GameState | undefined {
@@ -327,6 +398,56 @@ export class GameController {
   }
 
   private startNextHand(): void {
+    // Kick timed-out players before starting the next hand
+    if (this.timedOutPlayers.size > 0) {
+      for (const playerId of this.timedOutPlayers) {
+        // Remove from room players list
+        const idx = this.room.players.findIndex(p => p.id === playerId);
+        if (idx !== -1) {
+          this.room.players.splice(idx, 1);
+        }
+        // Notify socket-handler to clean up the socket
+        if (this.onPlayerKick) {
+          this.onPlayerKick(playerId);
+        }
+      }
+      this.timedOutPlayers.clear();
+      // Broadcast updated room after kicking
+      this.emitEvent(this.room.id, 'room:updated', this.room);
+    }
+
+    // Add pending players (spectators who clicked "sit down") to the active players list
+    if (this.room.pendingPlayers && this.room.pendingPlayers.length > 0) {
+      for (const pending of this.room.pendingPlayers) {
+        this.room.players.push(pending);
+      }
+      this.room.pendingPlayers = [];
+      this.emitEvent(this.room.id, 'room:updated', this.room);
+    }
+
+    // Remove standing players (those who chose to stand up between hands)
+    if (this.standingPlayers.size > 0) {
+      for (const playerId of this.standingPlayers) {
+        const idx = this.room.players.findIndex(p => p.id === playerId);
+        if (idx !== -1) {
+          this.room.players.splice(idx, 1);
+        }
+      }
+      this.standingPlayers.clear();
+      this.emitEvent(this.room.id, 'room:updated', this.room);
+    }
+
+    // If no human players remain, signal room destruction
+    const humanPlayers = this.room.players.filter(p => !p.isAI);
+    const pendingHumans = (this.room.pendingPlayers || []).filter(p => !p.isAI);
+    if (humanPlayers.length === 0 && pendingHumans.length === 0) {
+      this.room.status = 'waiting';
+      if (this.onRoomEmpty) {
+        this.onRoomEmpty();
+      }
+      return;
+    }
+
     // Remove players with no chips
     const activePlayers = this.room.players.filter(p => p.chips > 0 || p.isAI);
     if (activePlayers.filter(p => p.chips > 0).length < 2) {
@@ -407,13 +528,11 @@ export class GameController {
     const currentPlayer = state.players[state.currentPlayerIndex];
     if (!currentPlayer || currentPlayer.id !== playerId) return;
 
-    // Auto-fold on timeout (or check if possible)
-    const callAmount = state.currentBet - currentPlayer.currentBet;
-    if (callAmount === 0) {
-      this.processAction(playerId, { type: 'check' });
-    } else {
-      this.processAction(playerId, { type: 'fold' });
-    }
+    // Mark this player for removal at the start of the next hand
+    this.timedOutPlayers.add(playerId);
+
+    // Always fold on timeout (no check)
+    this.processAction(playerId, { type: 'fold' });
   }
 
   private clearActionTimer(): void {

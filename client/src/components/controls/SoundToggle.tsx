@@ -15,12 +15,12 @@ export default function SoundToggle() {
   return (
     <button
       onClick={toggle}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg
+      className="flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg
         bg-casino-card/80 border border-casino-border/50 text-gray-300 hover:text-white
-        transition-colors backdrop-blur-sm cursor-pointer text-xs font-medium"
+        transition-colors backdrop-blur-sm cursor-pointer text-[10px] sm:text-xs font-medium"
       title={on ? 'Mute sounds' : 'Enable sounds'}
     >
-      {on ? <Volume2 size={14} /> : <VolumeX size={14} />}
+      {on ? <Volume2 size={12} className="sm:w-3.5 sm:h-3.5" /> : <VolumeX size={12} className="sm:w-3.5 sm:h-3.5" />}
     </button>
   );
 }

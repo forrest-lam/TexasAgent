@@ -141,16 +141,16 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
   return (
     <div className={`relative w-full h-full ${screenShake ? 'screen-shake' : ''}`}>
       {/* Table surface */}
-      <div className="absolute inset-[5%] rounded-[50%] bg-felt-gradient shadow-2xl border-8 border-amber-900/60"
+      <div className="absolute inset-[2%] sm:inset-[5%] rounded-[50%] bg-felt-gradient shadow-2xl border-4 sm:border-8 border-amber-900/60"
         style={{ boxShadow: 'inset 0 0 60px rgba(0,0,0,0.4), 0 0 40px rgba(0,0,0,0.6)' }}
       >
         {/* Inner rail */}
-        <div className="absolute inset-3 rounded-[50%] border border-gold-500/10" />
+        <div className="absolute inset-2 sm:inset-3 rounded-[50%] border border-gold-500/10" />
 
         {/* Center content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 sm:gap-3">
           {/* Phase indicator */}
-          <div className="px-3 py-1 rounded-full bg-black/30 text-gray-300 text-xs font-medium uppercase tracking-wider">
+          <div className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-black/30 text-gray-300 text-[10px] sm:text-xs font-medium uppercase tracking-wider">
             {phaseLabel} · {t('game.round')} {gameState.round}
           </div>
 
@@ -162,12 +162,12 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
 
           {/* Winners */}
           {gameState.winners && gameState.winners.length > 0 && (
-            <div className="flex flex-col items-center gap-1 mt-2">
+            <div className="flex flex-col items-center gap-1 mt-1 sm:mt-2">
               {gameState.winners.map((w, i) => {
                 const p = gameState.players.find(pl => pl.id === w.playerId);
                 return (
-                  <div key={i} className="px-3 py-1.5 rounded-full bg-gold-500/20 border border-gold-500/40 text-gold-400 text-sm font-semibold winner-flash flex items-center gap-1.5">
-                    <span className="text-base">👑</span>
+                  <div key={i} className="px-2 py-1 sm:px-3 sm:py-1.5 rounded-full bg-gold-500/20 border border-gold-500/40 text-gold-400 text-[10px] sm:text-sm font-semibold winner-flash flex items-center gap-1 sm:gap-1.5">
+                    <span className="text-xs sm:text-base">👑</span>
                     {p?.name} wins ${w.amount} ({tHand(w.handName)})
                   </div>
                 );

@@ -1,0 +1,19 @@
+{
+  "user_1771937346585_bt5bda": {
+    "id": "user_1771937346585_bt5bda",
+    "username": "f0rrest",
+    "passwordHash": "$2b$10$A9Rhg0xvkK/sGHHl1WHnGeNsbCcPs7qAZsCpcDAYUsqR3YZ2OxRz6",
+    "chips": 5148,
+    "stats": {
+      "gamesPlayed": 13,
+      "gamesWon": 0,
+      "totalEarnings": -170
+    },
+    "createdAt": 1771937346670,
+    "llmConfig": {
+      "apiKey": "sk-vY9TubQLpYCZSgN5eQgwTaSDmkyiDqn1dbLYAUr8RhydFdc4",
+      "apiBaseUrl": "https://api.lkeap.cloud.tencent.com/v1",
+      "model": "deepseek-v3.2"
+    }
+  }
+}

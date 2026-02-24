@@ -40,14 +40,14 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn }: LLMAdvis
   if (!configured) return null;
 
   return (
-    <div className="fixed left-4 bottom-24 z-50">
+    <div className="fixed left-2 bottom-20 sm:left-4 sm:bottom-24 z-50">
       {/* Toggle button */}
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={expanded ? () => setExpanded(false) : handleGetAdvice}
         disabled={loading}
-        className={`flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg backdrop-blur-md
+        className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-lg backdrop-blur-md
           transition-all cursor-pointer border
           ${isMyTurn 
             ? 'bg-purple-600/80 border-purple-400/50 text-white hover:bg-purple-600' 
@@ -56,8 +56,8 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn }: LLMAdvis
           ${loading ? 'animate-pulse' : ''}
           disabled:opacity-50`}
       >
-        {loading ? <Loader2 size={16} className="animate-spin" /> : <Brain size={16} />}
-        <span className="text-xs font-medium">{t('advisor.title')}</span>
+        {loading ? <Loader2 size={14} className="animate-spin sm:w-4 sm:h-4" /> : <Brain size={14} className="sm:w-4 sm:h-4" />}
+        <span className="text-[10px] sm:text-xs font-medium">{t('advisor.title')}</span>
       </motion.button>
 
       {/* Advice panel */}
@@ -67,8 +67,8 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn }: LLMAdvis
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute bottom-12 left-0 w-80 max-h-60 overflow-y-auto rounded-xl 
-              bg-casino-card/95 border border-purple-500/30 backdrop-blur-md shadow-xl p-3"
+            className="absolute bottom-10 sm:bottom-12 left-0 w-64 sm:w-80 max-h-48 sm:max-h-60 overflow-y-auto rounded-xl 
+              bg-casino-card/95 border border-purple-500/30 backdrop-blur-md shadow-xl p-2 sm:p-3"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">

@@ -20,6 +20,7 @@ export const locales: Record<Locale, Record<string, string>> = {
     'lobby.inGame': 'In Game',
     'lobby.waiting': 'Waiting',
     'lobby.join': 'Join',
+    'lobby.spectate': 'Watch',
     'lobby.players': 'players',
     'lobby.blinds': 'Blinds',
 
@@ -80,6 +81,11 @@ export const locales: Record<Locale, Record<string, string>> = {
     'game.victory': 'Victory!',
     'game.victoryDesc': 'You defeated all opponents!',
     'game.restart': 'Restart Game',
+    'game.spectating': 'You are watching this game',
+    'game.sitDown': 'Sit Down',
+    'game.standUp': 'Stand Up',
+    'game.standingUp': 'You will leave at the start of the next hand',
+    'game.waitingNextRound': 'You will join at the start of the next hand',
     'game.gameOverPlayers': 'Game Over! Not enough players.',
 
     // LLM Advisor
@@ -129,6 +135,7 @@ export const locales: Record<Locale, Record<string, string>> = {
     'lobby.inGame': '游戏中',
     'lobby.waiting': '等待中',
     'lobby.join': '加入',
+    'lobby.spectate': '观战',
     'lobby.players': '玩家',
     'lobby.blinds': '盲注',
 
@@ -189,6 +196,11 @@ export const locales: Record<Locale, Record<string, string>> = {
     'game.victory': '胜利！',
     'game.victoryDesc': '你击败了所有对手！',
     'game.restart': '重新开始',
+    'game.spectating': '你正在观战此游戏',
+    'game.sitDown': '坐下',
+    'game.standUp': '站起',
+    'game.standingUp': '你将在下一轮开始时离开游戏',
+    'game.waitingNextRound': '你将在下一轮开始时加入游戏',
     'game.gameOverPlayers': '游戏结束！玩家不足。',
 
     // LLM Advisor

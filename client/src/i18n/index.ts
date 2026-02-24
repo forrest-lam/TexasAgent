@@ -48,3 +48,8 @@ export const useI18n = create<I18nStore>((set, get) => ({
     return actionNames[locale]?.[action] || action;
   },
 }));
+
+// Alias for convenience — subscribes to locale changes for reactivity
+export function useTranslation() {
+  return useI18n(s => s.t);
+}

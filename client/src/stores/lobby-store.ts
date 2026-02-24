@@ -7,10 +7,16 @@ interface LobbyState {
   rooms: Room[];
   currentRoom: Room | null;
   isConnected: boolean;
+  isSpectating: boolean;
+  isSeated: boolean;
+  isStandingUp: boolean;
   connect: () => void;
   refreshRooms: () => void;
   createRoom: (name: string, config: RoomConfig) => void;
   joinRoom: (roomId: string) => void;
+  spectateRoom: (roomId: string) => void;
+  sitDown: () => void;
+  standUp: () => void;
   leaveRoom: () => void;
   addAI: (personality: string, engineType: string) => void;
   startGame: () => void;
@@ -20,6 +26,9 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   rooms: [],
   currentRoom: null,
   isConnected: false,
+  isSpectating: false,
+  isSeated: false,
+  isStandingUp: false,
 
   connect: () => {
     const token = useAuthStore.getState().token;
@@ -43,11 +52,33 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     });
 
     socket.on('room:left', () => {
-      set({ currentRoom: null });
+      set({ currentRoom: null, isSpectating: false, isSeated: false, isStandingUp: false });
     });
 
     socket.on('room:updated', (room) => {
+      const state = get();
+      // If player was standing up and is no longer in the players list, transition to spectator
+      if (state.isStandingUp) {
+        const myId = socket.id;
+        const inPlayers = room.players.some(p => p.id === myId);
+        if (!inPlayers) {
+          set({ currentRoom: room, isSpectating: true, isSeated: false, isStandingUp: false });
+          return;
+        }
+      }
       set({ currentRoom: room });
+    });
+
+    socket.on('room:spectating', (room) => {
+      set({ currentRoom: room, isSpectating: true, isSeated: false });
+    });
+
+    socket.on('room:seated', () => {
+      set({ isSeated: true });
+    });
+
+    socket.on('room:stood-up', () => {
+      set({ isStandingUp: true });
     });
 
     socket.on('user:updated', (user) => {
@@ -74,9 +105,25 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     socket.emit('room:join', roomId);
   },
 
+  spectateRoom: (roomId: string) => {
+    const socket = getSocket();
+    socket.emit('room:spectate', roomId);
+  },
+
+  sitDown: () => {
+    const socket = getSocket();
+    socket.emit('room:sit');
+  },
+
+  standUp: () => {
+    const socket = getSocket();
+    socket.emit('room:stand');
+  },
+
   leaveRoom: () => {
     const socket = getSocket();
     socket.emit('room:leave');
+    set({ isSpectating: false, isSeated: false, isStandingUp: false });
   },
 
   addAI: (personality: string, engineType: string) => {

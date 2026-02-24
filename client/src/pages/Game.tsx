@@ -8,10 +8,10 @@ import { getSocket } from '../services/socket-service';
 import PokerTable from '../components/table/PokerTable';
 import ActionPanel from '../components/controls/ActionPanel';
 import GameLog from '../components/table/GameLog';
-import LanguageSwitch from '../components/controls/LanguageSwitch';
+import { LanguageSwitch } from '../components/controls/LanguageSwitch';
 import SoundToggle from '../components/controls/SoundToggle';
 import LLMAdvisor from '../components/controls/LLMAdvisor';
-import { ArrowLeft, RotateCcw } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Armchair, LogOut } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { playSound } from '../services/sound-service';
 import { recordAction, recordHandResult, setCurrentRound } from '../services/player-memory';
@@ -54,7 +54,7 @@ export default function Game() {
     // Track current round for memory
     setCurrentRound(gameState.round);
 
-    // Record actions to player memory (with phase info)
+    // Record actions to player memory (with phase info) — record ALL players for LLM profiling
     if (gameState.lastAction) {
       const actionKey = `${gameState.lastAction.playerId}-${gameState.lastAction.action.type}-${gameState.lastAction.action.amount || 0}`;
       if (actionKey !== prevLastActionRef.current) {
@@ -73,7 +73,7 @@ export default function Game() {
       }
     }
 
-    // Record hand results + settle chips for local mode
+    // Record hand results + settle chips for local mode — track ALL players for LLM profiling
     if (phase === 'showdown' && gameState.winners && prevRoundRef.current !== gameState.round) {
       prevRoundRef.current = gameState.round;
       const winnerIds = new Set(gameState.winners.map(w => w.playerId));
@@ -117,13 +117,23 @@ export default function Game() {
       const socket = getSocket();
       setMyPlayerId(socket.id || '');
       initGameListeners();
+      // Request current game state in case we're rejoining mid-game
+      socket.emit('game:resync');
       socket.on('connect', () => {
         setMyPlayerId(socket.id || '');
+        socket.emit('game:resync');
+      });
+      // If kicked from room (e.g. timeout), navigate back to lobby
+      socket.on('room:left', () => {
+        clearGame();
+        navigate('/');
       });
     }
 
     return () => {
       localEngine.current?.cleanup();
+      const socket = getSocket();
+      socket.off('room:left');
       clearGame();
     };
   }, [roomId]);
@@ -163,7 +173,12 @@ export default function Game() {
   };
 
   const handleBack = () => {
-    localEngine.current?.cleanup();
+    if (isLocal) {
+      localEngine.current?.cleanup();
+    } else {
+      // Leave the multiplayer room so we don't get stuck
+      useLobbyStore.getState().leaveRoom();
+    }
     clearGame();
     navigate('/');
   };
@@ -175,34 +190,38 @@ export default function Game() {
   const humanWonAll = gameState?.phase === 'showdown' && aliveCount < 2 && humanPlayer && humanPlayer.chips > 0;
   const needsRestart = humanBusted || humanWonAll;
 
+  // Spectator mode: player is watching but not in the game
+  const { isSpectating, isSeated, isStandingUp, sitDown, standUp } = useLobbyStore();
+  const isSpectator = !isLocal && gameState && !gameState.players.find(p => p.id === myPlayerId);
+
   return (
     <div className="h-screen w-screen bg-casino-bg overflow-hidden relative">
       {/* Background effects */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(27,94,32,0.06)_0%,transparent_70%)]" />
 
       {/* Top bar */}
-      <div className="fixed top-4 left-4 right-4 z-50 flex items-center justify-between">
+      <div className="fixed top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-4 z-50 flex items-center justify-between">
         <button
           onClick={handleBack}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg
+          className="flex items-center gap-1 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg
             bg-casino-card/80 border border-casino-border/50 text-gray-400 hover:text-white
             transition-colors backdrop-blur-sm cursor-pointer"
         >
-          <ArrowLeft size={16} />
-          <span className="text-xs font-medium">{t('game.lobby')}</span>
+          <ArrowLeft size={14} className="sm:w-4 sm:h-4" />
+          <span className="text-[10px] sm:text-xs font-medium">{t('game.lobby')}</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Restart button for single player */}
           {isLocal && (
             <button
               onClick={handleRestart}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg
+              className="flex items-center gap-1 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg
                 bg-casino-card/80 border border-casino-border/50 text-gray-400 hover:text-white
                 transition-colors backdrop-blur-sm cursor-pointer"
             >
-              <RotateCcw size={14} />
-              <span className="text-xs font-medium">{t('game.restart')}</span>
+              <RotateCcw size={12} className="sm:w-3.5 sm:h-3.5" />
+              <span className="text-[10px] sm:text-xs font-medium hidden sm:inline">{t('game.restart')}</span>
             </button>
           )}
           <LanguageSwitch />
@@ -216,7 +235,7 @@ export default function Game() {
       {/* Poker table */}
       {gameState ? (
         <>
-          <div className="w-full h-full p-4">
+          <div className="w-full h-full pt-10 pb-2 px-1 sm:p-4">
             <PokerTable gameState={gameState} myPlayerId={myPlayerId} />
           </div>
 
@@ -268,7 +287,58 @@ export default function Game() {
             myPlayerId={myPlayerId}
             isMyTurn={isMyTurn || (isLocal && gameState.players[gameState.currentPlayerIndex]?.id === 'human' && gameState.phase !== 'showdown')}
             onAction={handleAction}
+            isLocal={isLocal}
           />
+
+          {/* Spectator "Sit Down" button */}
+          {isSpectator && (
+            <motion.div
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/95 via-black/80 to-transparent backdrop-blur-md z-50"
+            >
+              <div className="max-w-md mx-auto text-center space-y-3">
+                <p className="text-sm text-gray-400">
+                  {isSeated ? t('game.waitingNextRound') : t('game.spectating')}
+                </p>
+                {!isSeated && (
+                  <button
+                    onClick={() => { sitDown(); playSound('notify'); }}
+                    className="w-full py-3 rounded-xl bg-gold-500 text-black font-bold text-base
+                      hover:bg-gold-400 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Armchair size={18} />
+                    {t('game.sitDown')}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* "Stand Up" button for seated players in multiplayer */}
+          {!isLocal && !isSpectator && gameState && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="fixed bottom-20 right-2 sm:bottom-24 sm:right-4 z-50"
+            >
+              {isStandingUp ? (
+                <div className="px-3 py-2 rounded-lg bg-casino-card/80 border border-yellow-500/30 text-yellow-400 text-xs backdrop-blur-sm">
+                  {t('game.standingUp')}
+                </div>
+              ) : (
+                <button
+                  onClick={() => { standUp(); playSound('notify'); }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg
+                    bg-casino-card/80 border border-casino-border/50 text-gray-400 hover:text-yellow-400
+                    hover:border-yellow-500/30 transition-colors backdrop-blur-sm cursor-pointer"
+                >
+                  <LogOut size={14} />
+                  <span className="text-xs font-medium">{t('game.standUp')}</span>
+                </button>
+              )}
+            </motion.div>
+          )}
         </>
       ) : (
         <div className="flex items-center justify-center h-full">

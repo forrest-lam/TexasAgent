@@ -83,6 +83,19 @@ const MAX_RECENT_RESULTS = 10;
 let memoryCache: Record<string, PlayerProfile> = {};
 let currentRound = 0;
 
+/**
+ * Normalize player key: use player name as stable key instead of socket.id
+ * (socket.id changes on every reconnect, but name stays consistent)
+ */
+function normalizeKey(playerId: string, playerName?: string): string {
+  // For local mode, "human" is the consistent id
+  if (playerId === 'human') return 'human';
+  // For AI players, use their name (stable across sessions)
+  if (playerId.startsWith('ai-')) return playerName || playerId;
+  // For human multiplayer players, use name as the stable key
+  return playerName || playerId;
+}
+
 function load(): Record<string, PlayerProfile> {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
@@ -128,9 +141,10 @@ function emptyPhaseStats(): PhaseStats {
 }
 
 export function getPlayerProfile(playerId: string, playerName?: string): PlayerProfile {
-  if (!memoryCache[playerId]) {
-    memoryCache[playerId] = {
-      id: playerId,
+  const key = normalizeKey(playerId, playerName);
+  if (!memoryCache[key]) {
+    memoryCache[key] = {
+      id: key,
       name: playerName || playerId,
       handsPlayed: 0,
       handsWon: 0,
@@ -168,7 +182,9 @@ export function getPlayerProfile(playerId: string, playerName?: string): PlayerP
       _recentResults: [],
     };
   }
-  return memoryCache[playerId];
+  // Update name if provided (name may change if socket reconnects)
+  if (playerName) memoryCache[key].name = playerName;
+  return memoryCache[key];
 }
 
 export function setCurrentRound(round: number) {
@@ -183,6 +199,7 @@ export function recordAction(
   potSize?: number,
   phase?: string,
 ) {
+  const key = normalizeKey(playerId, playerName);
   const profile = getPlayerProfile(playerId, playerName);
   profile.name = playerName;
   profile._totalActions++;
@@ -419,15 +436,16 @@ export function getAllProfiles(): PlayerProfile[] {
  * Includes per-player: style, key stats, exploit tips, and recent action patterns.
  * Excludes raw player IDs for privacy.
  */
-export function getProfileSummaryForLLM(myPlayerId?: string): string {
+export function getProfileSummaryForLLM(myPlayerId?: string, myPlayerName?: string): string {
   const profiles = getAllProfiles().filter(p => p._totalActions >= 3);
   if (profiles.length === 0) return 'No player behavioral data available yet. This is early in the session.';
 
   const sections: string[] = [];
+  const myKey = myPlayerId ? normalizeKey(myPlayerId, myPlayerName) : undefined;
 
   // My own profile (self-awareness)
-  if (myPlayerId) {
-    const myProfile = profiles.find(p => p.id === myPlayerId);
+  if (myKey) {
+    const myProfile = profiles.find(p => p.id === myKey);
     if (myProfile && myProfile._totalActions >= 3) {
       sections.push(`### Your Own Play Style
 - Style: **${myProfile.style}** — ${getStyleDescription(myProfile.style)}
@@ -439,7 +457,7 @@ export function getProfileSummaryForLLM(myPlayerId?: string): string {
   }
 
   // Opponent profiles
-  const opponents = profiles.filter(p => p.id !== myPlayerId);
+  const opponents = profiles.filter(p => p.id !== myKey);
   for (const p of opponents) {
     const lines: string[] = [];
     lines.push(`### ${p.name}`);

@@ -55,6 +55,6 @@ export const BLIND_LEVELS = [
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 9;
-export const ACTION_TIMEOUT = 30000;
+export const ACTION_TIMEOUT = 60000;
 export const AI_THINK_DELAY_MIN = 1000;
 export const AI_THINK_DELAY_MAX = 3000;

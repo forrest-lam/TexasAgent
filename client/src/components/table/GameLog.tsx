@@ -31,15 +31,15 @@ export default function GameLog({ logs }: GameLogProps) {
   const { t } = useI18n();
 
   return (
-    <div className="fixed right-4 top-14 z-40">
+    <div className="fixed right-2 top-10 sm:right-4 sm:top-14 z-40">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-casino-card/90 border border-casino-border/50
+        className="flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg bg-casino-card/90 border border-casino-border/50
           text-gray-300 hover:text-white transition-colors backdrop-blur-sm cursor-pointer"
       >
-        <MessageSquare size={16} />
-        <span className="text-xs font-medium">{t('game.log')}</span>
-        {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <MessageSquare size={14} className="sm:w-4 sm:h-4" />
+        <span className="text-[10px] sm:text-xs font-medium">{t('game.log')}</span>
+        {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
       </button>
 
       <AnimatePresence>
@@ -48,9 +48,9 @@ export default function GameLog({ logs }: GameLogProps) {
             initial={{ opacity: 0, y: -10, height: 0 }}
             animate={{ opacity: 1, y: 0, height: 'auto' }}
             exit={{ opacity: 0, y: -10, height: 0 }}
-            className="mt-2 w-72 rounded-xl bg-casino-card/95 border border-casino-border/50 backdrop-blur-md overflow-hidden"
+            className="mt-2 w-56 sm:w-72 rounded-xl bg-casino-card/95 border border-casino-border/50 backdrop-blur-md overflow-hidden"
           >
-            <ScrollArea className="h-64 p-3">
+            <ScrollArea className="h-48 sm:h-64 p-2 sm:p-3">
               <div className="space-y-1">
                 {logs.length === 0 && (
                   <p className="text-xs text-gray-500 italic">{t('game.noActions')}</p>
