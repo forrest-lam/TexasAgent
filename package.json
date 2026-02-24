@@ -12,9 +12,8 @@
     "dev:client": "npm run dev --workspace=client",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build": "npm run build --workspace=shared && npm run build --workspace=server && npm run build --workspace=client",
-    "build:prod": "npm run build --workspace=client",
-    "start": "NODE_ENV=production node server/dist/index.js",
-    "start:prod": "npm run build:prod && NODE_ENV=production tsx server/src/index.ts"
+    "build:client": "npm run build --workspace=client",
+    "start:prod": "npm run build:client && NODE_ENV=production npx tsx server/src/index.ts"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

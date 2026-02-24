@@ -110,6 +110,33 @@ npm run dev:server   # http://localhost:3001
 
 单人模式只需启动客户端，多人在线需要同时启动服务端。
 
+### 生产环境部署
+
+一条命令构建前端并启动服务（服务端自动托管前端静态文件，只需一个端口）：
+
+```bash
+npm run start:prod    # 构建前端 + 启动服务，默认 http://0.0.0.0:3001
+```
+
+或使用 Docker：
+
+```bash
+docker build -t texas-agent .
+docker run -d -p 3001:3001 --name texas-agent texas-agent
+```
+
+如需 Nginx 反代，注意配置 WebSocket 转发：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+}
+```
+
 ## License
 
 [MIT](LICENSE)
