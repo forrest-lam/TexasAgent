@@ -1,6 +1,6 @@
 import {
   GameState, Player, PlayerAction, RoomConfig, AIPersonality, AIEngineType,
-  Deck, generateId,
+  Deck, generateId, AI_STARTING_CHIPS,
   getNextActivePlayerIndex, getSmallBlindIndex, getBigBlindIndex,
   isValidAction, applyAction, advancePhase, resetBetsForNewRound,
   determineWinners, calculateSidePots, getPlayersInHand,
@@ -21,10 +21,13 @@ export class LocalGameEngine {
   // Use a plain Set internally, serialize to array for JSON
   private actedSet: Set<string> = new Set();
 
-  constructor(config: RoomConfig, onStateChange: StateCallback, onLog: LogCallback) {
+  private humanChips: number;
+
+  constructor(config: RoomConfig, onStateChange: StateCallback, onLog: LogCallback, humanChips?: number) {
     this.config = config;
     this.onStateChange = onStateChange;
     this.onLog = onLog;
+    this.humanChips = humanChips ?? config.startingChips;
   }
 
   start(): void {
@@ -71,7 +74,7 @@ export class LocalGameEngine {
     const players: Player[] = [{
       id: 'human',
       name: 'You',
-      chips: this.config.startingChips,
+      chips: this.humanChips,
       cards: [],
       currentBet: 0,
       totalBet: 0,
@@ -86,7 +89,7 @@ export class LocalGameEngine {
       players.push({
         id: `ai-${i}`,
         name: aiNames[i % aiNames.length],
-        chips: this.config.startingChips,
+        chips: AI_STARTING_CHIPS,
         cards: [],
         currentBet: 0,
         totalBet: 0,

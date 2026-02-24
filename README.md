@@ -31,6 +31,14 @@
 - 追踪对手 tilt 状态（连败检测）
 - 支持 OpenAI、DeepSeek 等任意兼容 API
 
+### 用户系统
+
+- **注册/登录** — JWT 认证，用户数据 JSON 文件持久化
+- **筹码持久化** — 每用户初始 2000 筹码，单人和多人对战均实时结算
+- **单人模式 AI 固定筹码** — AI 对手每局固定 1000 筹码
+- **个人 LLM 配置** — 每位用户可在设置页配置自己的 API Key / Base URL / Model，打造私人 AI 顾问
+- **统计数据** — 追踪每位用户的对局数、胜场数、总收益
+
 ### 其他特性
 
 - **动画** — Framer Motion 驱动的筹码飞行、发牌翻牌、加注特效等动画
@@ -44,6 +52,7 @@
 |----|------|
 | 客户端 | React 18 + TypeScript + Vite + Tailwind CSS + Zustand |
 | 服务端 | Express + Socket.IO + TypeScript |
+| 认证 | JWT (jsonwebtoken) + bcryptjs，JSON 文件持久化 |
 | 共享层 | Monorepo (npm workspaces)，类型定义与游戏逻辑复用 |
 | UI 组件 | Radix UI + shadcn/ui + Framer Motion + Lucide Icons |
 
@@ -54,16 +63,19 @@ TexasAgent/
 ├── client/                  # React 客户端
 │   └── src/
 │       ├── components/      # UI 组件（牌桌、玩家、控制面板）
-│       ├── pages/           # 页面（大厅、游戏）
+│       ├── pages/           # 页面（登录、大厅、游戏、设置）
 │       ├── services/        # LLM 顾问、本地游戏引擎、玩家记忆、音效
-│       ├── stores/          # Zustand 状态管理
+│       ├── stores/          # Zustand 状态管理（认证、大厅、游戏）
 │       └── i18n/            # 国际化
 ├── server/                  # Node.js 服务端
 │   └── src/
 │       ├── ai/              # AI 引擎（规则/LLM）+ 性格系统
+│       ├── auth             # JWT 认证 & Socket.IO 认证中间件
+│       ├── user-store       # 用户数据持久化（JSON）
 │       ├── game-controller  # 游戏流程控制
 │       └── room-manager     # 房间管理
-└── shared/                  # 共享类型、牌组、手牌评估、规则
+├── shared/                  # 共享类型、牌组、手牌评估、规则
+└── data/                    # 运行时用户数据（自动创建）
 ```
 
 ## 快速开始
@@ -83,7 +95,13 @@ npm install
 
 ### 配置 LLM（可选）
 
-复制环境变量文件并填入你的 API Key：
+**方式一：用户界面配置（推荐）**
+
+注册登录后，进入**设置页面**即可配置个人 API Key、Base URL 和 Model，配置存储在服务端。
+
+**方式二：环境变量全局配置**
+
+复制环境变量文件并填入你的 API Key（作为 fallback）：
 
 ```bash
 cp client/.env.example client/.env

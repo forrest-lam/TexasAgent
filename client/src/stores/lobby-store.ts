@@ -1,13 +1,12 @@
 import { create } from 'zustand';
 import { Room, RoomConfig } from '@texas-agent/shared';
 import { getSocket, connectSocket } from '../services/socket-service';
+import { useAuthStore } from './auth-store';
 
 interface LobbyState {
   rooms: Room[];
   currentRoom: Room | null;
   isConnected: boolean;
-  playerName: string;
-  setPlayerName: (name: string) => void;
   connect: () => void;
   refreshRooms: () => void;
   createRoom: (name: string, config: RoomConfig) => void;
@@ -21,12 +20,10 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   rooms: [],
   currentRoom: null,
   isConnected: false,
-  playerName: `Player_${Math.random().toString(36).slice(2, 8)}`,
-
-  setPlayerName: (name: string) => set({ playerName: name }),
 
   connect: () => {
-    const socket = connectSocket();
+    const token = useAuthStore.getState().token;
+    const socket = connectSocket(token || undefined);
 
     socket.on('connect', () => {
       set({ isConnected: true });
@@ -53,6 +50,10 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
       set({ currentRoom: room });
     });
 
+    socket.on('user:updated', (user) => {
+      useAuthStore.getState().updateUser(user);
+    });
+
     socket.on('error', (msg) => {
       console.error('Server error:', msg);
     });
@@ -70,8 +71,7 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
 
   joinRoom: (roomId: string) => {
     const socket = getSocket();
-    const { playerName } = get();
-    socket.emit('room:join', roomId, playerName);
+    socket.emit('room:join', roomId);
   },
 
   leaveRoom: () => {

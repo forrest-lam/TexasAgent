@@ -9,16 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { motion } from 'framer-motion';
-import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff } from 'lucide-react';
+import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff, Settings, LogOut, Coins } from 'lucide-react';
 import { useI18n } from '../i18n';
 import LanguageSwitch from '../components/controls/LanguageSwitch';
 import SoundToggle from '../components/controls/SoundToggle';
 import { playSound } from '../services/sound-service';
+import { useAuthStore } from '../stores/auth-store';
 
 export default function Lobby() {
   const navigate = useNavigate();
-  const { rooms, currentRoom, isConnected, playerName, setPlayerName, connect, createRoom, joinRoom, addAI, startGame } = useLobbyStore();
+  const { rooms, currentRoom, isConnected, connect, createRoom, joinRoom, addAI, startGame } = useLobbyStore();
   const { t } = useI18n();
+  const { user, logout } = useAuthStore();
 
   const [showCreate, setShowCreate] = useState(false);
   const [roomName, setRoomName] = useState('');
@@ -33,7 +35,7 @@ export default function Lobby() {
   }, [currentRoom?.status]);
 
   const handleCreateRoom = () => {
-    const name = roomName || `${playerName}'s Room`;
+    const name = roomName || `${user?.username}'s Room`;
     createRoom(name, config);
     setShowCreate(false);
     playSound('notify');
@@ -81,14 +83,17 @@ export default function Lobby() {
             )}
             <span className="text-xs text-gray-400">{isConnected ? t('lobby.online') : t('lobby.offline')}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Input
-              value={playerName}
-              onChange={e => setPlayerName(e.target.value)}
-              className="w-36 h-8 text-xs bg-casino-card border-casino-border text-white"
-              placeholder={t('lobby.yourName')}
-            />
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg">
+            <Coins size={14} className="text-yellow-400" />
+            <span className="text-sm font-medium text-yellow-400">{user?.chips?.toLocaleString()}</span>
           </div>
+          <span className="text-sm text-white font-medium">{user?.username}</span>
+          <button onClick={() => navigate('/settings')} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors" title={t('settings.title')}>
+            <Settings size={16} className="text-gray-400 hover:text-white" />
+          </button>
+          <button onClick={() => { logout(); navigate('/login'); }} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors" title={t('auth.logout')}>
+            <LogOut size={16} className="text-gray-400 hover:text-red-400" />
+          </button>
         </div>
       </header>
 
@@ -187,7 +192,7 @@ export default function Lobby() {
               <Input
                 value={roomName}
                 onChange={e => setRoomName(e.target.value)}
-                placeholder={`${playerName}'s Room`}
+                placeholder={`${user?.username}'s Room`}
                 className="mt-1 bg-casino-bg border-casino-border text-white"
               />
             </div>

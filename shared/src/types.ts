@@ -122,6 +122,34 @@ export interface AIDecisionContext {
   }[];
 }
 
+// User system types
+export interface UserProfile {
+  id: string;
+  username: string;
+  chips: number;
+  llmConfig?: {
+    apiKey: string;
+    apiBaseUrl: string;
+    model: string;
+  };
+  stats: {
+    gamesPlayed: number;
+    gamesWon: number;
+    totalEarnings: number;
+  };
+  createdAt: number;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: Omit<UserProfile, 'llmConfig'> & {
+    llmConfig?: { apiBaseUrl: string; model: string; hasApiKey: boolean };
+  };
+}
+
+export const DEFAULT_USER_CHIPS = 2000;
+export const AI_STARTING_CHIPS = 1000;
+
 // Socket event types
 export interface ServerToClientEvents {
   'room:list': (rooms: Room[]) => void;
@@ -133,13 +161,14 @@ export interface ServerToClientEvents {
   'game:action': (data: { playerId: string; action: PlayerAction }) => void;
   'game:ended': (state: GameState) => void;
   'game:your-turn': (data: { timeLimit: number }) => void;
+  'user:updated': (user: AuthResponse['user']) => void;
   'error': (message: string) => void;
 }
 
 export interface ClientToServerEvents {
   'room:list': () => void;
   'room:create': (config: RoomConfig & { name: string }) => void;
-  'room:join': (roomId: string, playerName: string) => void;
+  'room:join': (roomId: string) => void;
   'room:leave': () => void;
   'room:add-ai': (personality: AIPersonality, engineType: AIEngineType) => void;
   'game:start': () => void;

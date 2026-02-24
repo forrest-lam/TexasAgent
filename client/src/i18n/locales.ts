@@ -91,6 +91,24 @@ export const locales: Record<Locale, Record<string, string>> = {
 
     // Settings
     'settings.language': 'Language',
+    'settings.title': 'Settings',
+    'settings.llmConfig': 'LLM Configuration',
+    'settings.apiKey': 'API Key',
+    'settings.apiBaseUrl': 'API Base URL',
+    'settings.model': 'Model',
+    'settings.save': 'Save',
+    'settings.saved': 'Saved!',
+    'settings.chips': 'Chips',
+
+    // Auth
+    'auth.login': 'Login',
+    'auth.register': 'Register',
+    'auth.username': 'Username',
+    'auth.password': 'Password',
+    'auth.noAccount': "Don't have an account?",
+    'auth.hasAccount': 'Already have an account?',
+    'auth.logout': 'Logout',
+    'auth.welcome': 'Welcome',
   },
   zh: {
     // App title
@@ -182,6 +200,24 @@ export const locales: Record<Locale, Record<string, string>> = {
 
     // Settings
     'settings.language': '语言',
+    'settings.title': '设置',
+    'settings.llmConfig': 'LLM 配置',
+    'settings.apiKey': 'API Key',
+    'settings.apiBaseUrl': 'API 地址',
+    'settings.model': '模型',
+    'settings.save': '保存',
+    'settings.saved': '已保存！',
+    'settings.chips': '筹码',
+
+    // Auth
+    'auth.login': '登录',
+    'auth.register': '注册',
+    'auth.username': '用户名',
+    'auth.password': '密码',
+    'auth.noAccount': '没有账号？',
+    'auth.hasAccount': '已有账号？',
+    'auth.logout': '退出登录',
+    'auth.welcome': '欢迎',
   },
 };
 

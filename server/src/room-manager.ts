@@ -1,11 +1,11 @@
-import { Room, RoomConfig, Player, AIPersonality, AIEngineType } from '@texas-agent/shared';
+import { Room, RoomConfig, Player, AIPersonality, AIEngineType, AI_STARTING_CHIPS } from '@texas-agent/shared';
 import { generateId } from '@texas-agent/shared';
 import { getRandomAIName } from './ai/rule-based/personalities';
 
 const MAX_ROOMS = 50;
 const rooms = new Map<string, Room>();
 
-export function createRoom(name: string, config: RoomConfig, creatorId: string, creatorName: string): Room {
+export function createRoom(name: string, config: RoomConfig, creatorId: string, creatorName: string, userChips?: number): Room {
   if (rooms.size >= MAX_ROOMS) {
     throw new Error('Maximum number of rooms reached');
   }
@@ -17,7 +17,7 @@ export function createRoom(name: string, config: RoomConfig, creatorId: string, 
     players: [{
       id: creatorId,
       name: creatorName,
-      chips: config.startingChips,
+      chips: userChips ?? config.startingChips,
       cards: [],
       currentBet: 0,
       totalBet: 0,
@@ -35,7 +35,7 @@ export function createRoom(name: string, config: RoomConfig, creatorId: string, 
   return room;
 }
 
-export function joinRoom(roomId: string, playerId: string, playerName: string): Room {
+export function joinRoom(roomId: string, playerId: string, playerName: string, userChips?: number): Room {
   const room = rooms.get(roomId);
   if (!room) throw new Error('Room not found');
   if (room.status === 'playing') throw new Error('Game already in progress');
@@ -46,7 +46,7 @@ export function joinRoom(roomId: string, playerId: string, playerName: string): 
   room.players.push({
     id: playerId,
     name: playerName,
-    chips: room.config.startingChips,
+    chips: userChips ?? room.config.startingChips,
     cards: [],
     currentBet: 0,
     totalBet: 0,
@@ -83,7 +83,7 @@ export function addAIPlayer(roomId: string, personality: AIPersonality, engineTy
   const aiPlayer: Player = {
     id: `ai-${generateId()}`,
     name: getRandomAIName(personality),
-    chips: room.config.startingChips,
+    chips: AI_STARTING_CHIPS,
     cards: [],
     currentBet: 0,
     totalBet: 0,

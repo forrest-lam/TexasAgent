@@ -2,17 +2,22 @@ import { Server, Socket } from 'socket.io';
 import { ServerToClientEvents, ClientToServerEvents, PlayerAction, AIPersonality, AIEngineType, RoomConfig } from '@texas-agent/shared';
 import * as RoomManager from './room-manager';
 import { GameController } from './game-controller';
+import { getUserById, updateUserChips, updateUserStats } from './user-store';
 
 type IOServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type IOSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const gameControllers = new Map<string, GameController>();
-const playerNames = new Map<string, string>();
 const playerRooms = new Map<string, string>();
+// Map socket.id → userId for chip settlement
+const socketUserMap = new Map<string, string>();
 
 export function setupSocketHandlers(io: IOServer): void {
   io.on('connection', (socket: IOSocket) => {
-    console.log(`Player connected: ${socket.id}`);
+    const userId = (socket as any).data.userId;
+    const username = (socket as any).data.username;
+    console.log(`Player connected: ${username} (${socket.id})`);
+    socketUserMap.set(socket.id, userId);
 
     // Room list
     socket.on('room:list', () => {
@@ -21,8 +26,12 @@ export function setupSocketHandlers(io: IOServer): void {
 
     // Create room
     socket.on('room:create', (config: RoomConfig & { name: string }) => {
-      const playerName = playerNames.get(socket.id) || `Player_${socket.id.slice(0, 6)}`;
-      const room = RoomManager.createRoom(config.name, config, socket.id, playerName);
+      const user = getUserById(userId);
+      if (!user) {
+        socket.emit('error', 'User not found');
+        return;
+      }
+      const room = RoomManager.createRoom(config.name, config, socket.id, username, user.chips);
       socket.join(room.id);
       playerRooms.set(socket.id, room.id);
       socket.emit('room:joined', room);
@@ -30,9 +39,13 @@ export function setupSocketHandlers(io: IOServer): void {
     });
 
     // Join room
-    socket.on('room:join', (roomId: string, name: string) => {
-      playerNames.set(socket.id, name);
-      const room = RoomManager.joinRoom(roomId, socket.id, name);
+    socket.on('room:join', (roomId: string) => {
+      const user = getUserById(userId);
+      if (!user) {
+        socket.emit('error', 'User not found');
+        return;
+      }
+      const room = RoomManager.joinRoom(roomId, socket.id, username, user.chips);
       socket.join(room.id);
       playerRooms.set(socket.id, room.id);
       socket.emit('room:joined', room);
@@ -114,9 +127,9 @@ export function setupSocketHandlers(io: IOServer): void {
 
     // Disconnect
     socket.on('disconnect', () => {
-      console.log(`Player disconnected: ${socket.id}`);
+      console.log(`Player disconnected: ${username} (${socket.id})`);
       handleLeaveRoom(io, socket);
-      playerNames.delete(socket.id);
+      socketUserMap.delete(socket.id);
     });
   });
 }
@@ -177,9 +190,33 @@ function emitGameEvent(io: IOServer, roomId: string, event: string, data: unknow
     case 'game:action':
       io.to(roomId).emit('game:action', data as { playerId: string; action: PlayerAction });
       break;
-    case 'game:ended':
+    case 'game:ended': {
+      // Settle chips for human players
+      const gameState = data as any;
+      if (gameState?.winners) {
+        settleChips(roomId, gameState);
+      }
       io.to(roomId).emit('game:ended', data as any);
+      // Send updated user info to each human player
+      for (const player of room.players) {
+        if (!player.isAI) {
+          const uid = socketUserMap.get(player.id);
+          if (uid) {
+            const user = getUserById(uid);
+            if (user) {
+              io.to(player.id).emit('user:updated', {
+                id: user.id,
+                username: user.username,
+                chips: user.chips,
+                stats: user.stats,
+                createdAt: user.createdAt,
+              });
+            }
+          }
+        }
+      }
       break;
+    }
     case 'game:your-turn': {
       const turnData = data as { playerId: string; timeLimit: number };
       io.to(turnData.playerId).emit('game:your-turn', { timeLimit: turnData.timeLimit });
@@ -191,6 +228,29 @@ function emitGameEvent(io: IOServer, roomId: string, event: string, data: unknow
     case 'error':
       io.to(roomId).emit('error', data as string);
       break;
+  }
+}
+
+function settleChips(roomId: string, gameState: any): void {
+  const room = RoomManager.getRoom(roomId);
+  if (!room) return;
+
+  for (const player of room.players) {
+    if (player.isAI) continue;
+    const uid = socketUserMap.get(player.id);
+    if (!uid) continue;
+
+    // Find how much this player won
+    const winEntry = gameState.winners?.find((w: any) => w.playerId === player.id);
+    const winAmount = winEntry?.amount || 0;
+
+    // Calculate net: won amount - what they bet (totalBet from game state)
+    const playerInGame = gameState.players?.find((p: any) => p.id === player.id);
+    const totalBet = playerInGame?.totalBet || 0;
+    const net = winAmount - totalBet;
+
+    updateUserChips(uid, net);
+    updateUserStats(uid, winAmount > 0, net);
   }
 }
 

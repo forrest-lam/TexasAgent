@@ -6,13 +6,45 @@
 
 import { GameState, Card } from '@texas-agent/shared';
 import { getProfileSummaryForLLM } from './player-memory';
+import { useAuthStore } from '../stores/auth-store';
 
-const API_KEY = import.meta.env.VITE_LLM_API_KEY as string || '';
-const API_BASE_URL = (import.meta.env.VITE_LLM_API_BASE_URL as string || 'https://api.openai.com/v1').replace(/\/$/, '');
-const MODEL = import.meta.env.VITE_LLM_MODEL as string || 'gpt-4o-mini';
+// Fallback to env vars if user hasn't configured their own
+function getLLMConfig() {
+  const user = useAuthStore.getState().user;
+  const token = useAuthStore.getState().token;
+  // If user has configured LLM on server, fetch the full key from their profile
+  // For now, use env vars as fallback; user-specific config loaded at runtime
+  const envKey = import.meta.env.VITE_LLM_API_KEY as string || '';
+  const envUrl = (import.meta.env.VITE_LLM_API_BASE_URL as string || 'https://api.openai.com/v1').replace(/\/$/, '');
+  const envModel = import.meta.env.VITE_LLM_MODEL as string || 'gpt-4o-mini';
+  return {
+    apiKey: (window as any).__userLLMApiKey || envKey,
+    apiBaseUrl: user?.llmConfig?.apiBaseUrl || envUrl,
+    model: user?.llmConfig?.model || envModel,
+    token,
+  };
+}
 
 export function isLLMConfigured(): boolean {
-  return !!API_KEY;
+  const { apiKey } = getLLMConfig();
+  const user = useAuthStore.getState().user;
+  return !!apiKey || !!user?.llmConfig?.hasApiKey;
+}
+
+// Load the user's full API key from server (called once when advisor is used)
+export async function loadUserLLMKey(): Promise<void> {
+  const { token } = getLLMConfig();
+  if (!token || (window as any).__userLLMApiKey) return;
+  try {
+    const API_BASE = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+    const res = await fetch(`${API_BASE}/api/user/llm-config/full`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.apiKey) (window as any).__userLLMApiKey = data.apiKey;
+    }
+  } catch {}
 }
 
 function cardToString(card: Card): string {
@@ -118,21 +150,26 @@ KEY PRINCIPLES:
 You give CONCISE, ACTIONABLE advice. Always respond in the user's language (if Chinese context detected, respond in Chinese).`;
 
 export async function getAdvice(state: GameState, myPlayerId: string): Promise<string> {
-  if (!API_KEY) {
+  // Ensure user LLM key is loaded from server
+  await loadUserLLMKey();
+
+  const { apiKey, apiBaseUrl, model } = getLLMConfig();
+
+  if (!apiKey) {
     throw new Error('API Key not configured');
   }
 
   const prompt = buildPrompt(state, myPlayerId);
   if (!prompt) throw new Error('Cannot build prompt');
 
-  const response = await fetch(`${API_BASE_URL}/chat/completions`, {
+  const response = await fetch(`${apiBaseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: prompt },

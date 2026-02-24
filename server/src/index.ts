@@ -4,8 +4,10 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { ServerToClientEvents, ClientToServerEvents } from '@texas-agent/shared';
+import { ServerToClientEvents, ClientToServerEvents, AuthResponse } from '@texas-agent/shared';
 import { setupSocketHandlers } from './socket-handler';
+import { signToken, authMiddleware, socketAuthMiddleware } from './auth';
+import { createUser, authenticateUser, getUserById, updateUserLLMConfig, setUserChips } from './user-store';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +27,9 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   },
 });
 
+// Socket authentication
+io.use(socketAuthMiddleware);
+
 app.use(cors({ origin: IS_PROD ? '*' : ALLOWED_ORIGINS }));
 app.use(express.json());
 
@@ -32,12 +37,140 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
+// --- Auth routes ---
+
+function toAuthUser(user: any): AuthResponse['user'] {
+  return {
+    id: user.id,
+    username: user.username,
+    chips: user.chips,
+    stats: user.stats,
+    createdAt: user.createdAt,
+    llmConfig: user.llmConfig
+      ? { apiBaseUrl: user.llmConfig.apiBaseUrl, model: user.llmConfig.model, hasApiKey: !!user.llmConfig.apiKey }
+      : undefined,
+  };
+}
+
+app.post('/api/auth/register', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    res.status(400).json({ error: 'Username and password required' });
+    return;
+  }
+  if (username.length < 2 || username.length > 20) {
+    res.status(400).json({ error: 'Username must be 2-20 characters' });
+    return;
+  }
+  if (password.length < 4) {
+    res.status(400).json({ error: 'Password must be at least 4 characters' });
+    return;
+  }
+
+  const user = createUser(username, password);
+  if (!user) {
+    res.status(409).json({ error: 'Username already exists' });
+    return;
+  }
+
+  const token = signToken({ userId: user.id, username: user.username });
+  res.json({ token, user: toAuthUser(user) } as AuthResponse);
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    res.status(400).json({ error: 'Username and password required' });
+    return;
+  }
+
+  const user = authenticateUser(username, password);
+  if (!user) {
+    res.status(401).json({ error: 'Invalid username or password' });
+    return;
+  }
+
+  const token = signToken({ userId: user.id, username: user.username });
+  res.json({ token, user: toAuthUser(user) } as AuthResponse);
+});
+
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+  const user = getUserById((req as any).userId);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  res.json({ user: toAuthUser(user) });
+});
+
+// --- User settings routes ---
+
+app.put('/api/user/llm-config', authMiddleware, (req, res) => {
+  const { apiKey, apiBaseUrl, model } = req.body;
+  const success = updateUserLLMConfig((req as any).userId, {
+    apiKey: apiKey || '',
+    apiBaseUrl: apiBaseUrl || 'https://api.openai.com/v1',
+    model: model || 'gpt-4o-mini',
+  });
+  if (!success) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+app.get('/api/user/llm-config', authMiddleware, (req, res) => {
+  const user = getUserById((req as any).userId);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  // Return config but mask the API key
+  const config = user.llmConfig;
+  res.json({
+    apiKey: config?.apiKey ? `${config.apiKey.slice(0, 6)}...${config.apiKey.slice(-4)}` : '',
+    apiBaseUrl: config?.apiBaseUrl || '',
+    model: config?.model || '',
+    hasApiKey: !!config?.apiKey,
+  });
+});
+
+// Return full (unmasked) API key for client-side LLM advisor usage
+app.get('/api/user/llm-config/full', authMiddleware, (req, res) => {
+  const user = getUserById((req as any).userId);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  const config = user.llmConfig;
+  res.json({
+    apiKey: config?.apiKey || '',
+    apiBaseUrl: config?.apiBaseUrl || '',
+    model: config?.model || '',
+  });
+});
+
+// Update chips (for single player mode settlement)
+app.put('/api/user/chips', authMiddleware, (req, res) => {
+  const { chips } = req.body;
+  if (typeof chips !== 'number' || chips < 0) {
+    res.status(400).json({ error: 'Invalid chips value' });
+    return;
+  }
+  const success = setUserChips((req as any).userId, chips);
+  if (!success) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  res.json({ ok: true, chips });
+});
+
 // Production: serve client static files
 if (IS_PROD) {
   const clientDist = path.resolve(__dirname, '../../client/dist');
   app.use(express.static(clientDist));
-  // SPA fallback
-  app.get('*', (_req, res) => {
+  // SPA fallback — only for non-API routes
+  app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }

@@ -16,6 +16,7 @@ import { useI18n } from '../i18n';
 import { playSound } from '../services/sound-service';
 import { recordAction, recordHandResult, setCurrentRound } from '../services/player-memory';
 import { motion } from 'framer-motion';
+import { useAuthStore } from '../stores/auth-store';
 
 export default function Game() {
   const { roomId } = useParams();
@@ -72,13 +73,37 @@ export default function Game() {
       }
     }
 
-    // Record hand results
+    // Record hand results + settle chips for local mode
     if (phase === 'showdown' && gameState.winners && prevRoundRef.current !== gameState.round) {
       prevRoundRef.current = gameState.round;
       const winnerIds = new Set(gameState.winners.map(w => w.playerId));
       for (const p of gameState.players) {
         if (p.isActive) {
           recordHandResult(p.id, p.name, winnerIds.has(p.id));
+        }
+      }
+
+      // Settle chips in local (single player) mode
+      if (isLocal) {
+        const human = gameState.players.find(p => p.id === 'human');
+        if (human) {
+          const { user, token, updateUser } = useAuthStore.getState();
+          if (user && token) {
+            // Update user chips to match current in-game chips
+            const API_BASE = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+            const newChips = human.chips;
+            fetch(`${API_BASE}/api/auth/me`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }).then(r => r.json()).then(data => {
+              if (data.user) updateUser({ ...data.user, chips: newChips });
+            }).catch(() => {});
+            // Tell server the new chip count
+            fetch(`${API_BASE}/api/user/chips`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ chips: newChips }),
+            }).catch(() => {});
+          }
         }
       }
     }
@@ -104,11 +129,13 @@ export default function Game() {
   }, [roomId]);
 
   const startLocalGame = () => {
+    const userChips = useAuthStore.getState().user?.chips ?? 2000;
     const config: RoomConfig = { ...DEFAULT_ROOM_CONFIG, aiCount: 5 };
     localEngine.current = new LocalGameEngine(
       config,
       (state) => setGameState(state),
-      (msg) => addLog(msg)
+      (msg) => addLog(msg),
+      userChips,
     );
     localEngine.current.start();
     setStarted(true);
