@@ -100,6 +100,63 @@ export function setupSocketHandlers(io: IOServer): void {
         socket.emit('room:seated');
         io.to(room.id).emit('room:updated', room);
         broadcastRoomList(io);
+
+        // If the room is waiting (game paused) and there are enough players to resume,
+        // merge pending players and auto-start a new game
+        if (room.status === 'waiting') {
+          const totalPlayers = room.players.length + (room.pendingPlayers?.length ?? 0);
+          if (totalPlayers >= 2) {
+            // Merge pending players into the active roster
+            if (room.pendingPlayers && room.pendingPlayers.length > 0) {
+              for (const pending of room.pendingPlayers) {
+                room.players.push(pending);
+              }
+              room.pendingPlayers = [];
+            }
+            io.to(room.id).emit('room:updated', room);
+
+            // Create a fresh game controller and start
+            let controller = gameControllers.get(roomId);
+            if (controller) {
+              controller.cleanup();
+            }
+            controller = new GameController(room, (rId, event, data) => {
+              emitGameEvent(io, rId, event, data);
+            });
+            controller.setOnPlayerKick((playerId) => {
+              const playerSocket = io.sockets.sockets.get(playerId);
+              if (playerSocket) {
+                playerSocket.leave(roomId);
+                playerSocket.emit('room:left');
+              }
+              playerRooms.delete(playerId);
+              broadcastRoomList(io);
+            });
+            controller.setOnRoomEmpty(() => {
+              const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+              if (socketsInRoom && socketsInRoom.size > 0) {
+                return;
+              }
+              controller!.cleanup();
+              gameControllers.delete(roomId);
+              RoomManager.deleteRoom(roomId);
+              broadcastRoomList(io);
+            });
+            gameControllers.set(roomId, controller);
+            controller.startGame();
+            io.to(room.id).emit('room:updated', room);
+            broadcastRoomList(io);
+
+            for (const player of room.players) {
+              if (!player.isAI) {
+                const personalState = controller.getSanitizedStateForPlayer(player.id);
+                if (personalState) {
+                  io.to(player.id).emit('game:state', personalState);
+                }
+              }
+            }
+          }
+        }
       } catch (err: any) {
         socket.emit('error', err.message);
       }
@@ -169,8 +226,15 @@ export function setupSocketHandlers(io: IOServer): void {
         playerRooms.delete(playerId);
         broadcastRoomList(io);
       });
-      // Register callback for when only AI players remain — destroy the room
+      // Register callback for when only AI players remain in the players list
       controller.setOnRoomEmpty(() => {
+        // Check if there are still spectators (sockets in the room)
+        const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+        if (socketsInRoom && socketsInRoom.size > 0) {
+          // Spectators are still watching — keep the room alive, AI will keep playing
+          return;
+        }
+        // No one connected — destroy the room
         controller.cleanup();
         gameControllers.delete(roomId);
         RoomManager.deleteRoom(roomId);
@@ -239,33 +303,39 @@ function handleLeaveRoom(io: IOServer, socket: IOSocket): void {
   const roomId = playerRooms.get(socket.id);
   if (!roomId) return;
 
-  // If a game is in progress, force-fold the leaving player first
+  // Leave the socket room FIRST so subsequent broadcasts don't reach the leaving player
+  socket.leave(roomId);
+  playerRooms.delete(socket.id);
+  socket.emit('room:left');
+
+  // If a game is in progress, force-fold the leaving player
   const controller = gameControllers.get(roomId);
   if (controller) {
     controller.handlePlayerLeave(socket.id);
   }
 
   const room = RoomManager.leaveRoom(roomId, socket.id);
-  socket.leave(roomId);
-  playerRooms.delete(socket.id);
-  socket.emit('room:left');
 
   if (room) {
-    // Clean up game controller if no human players remain
+    // Check if there are still human sockets in the room (players + spectators)
+    const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
     const humanPlayers = room.players.filter(p => !p.isAI);
     const pendingHumans = (room.pendingPlayers || []).filter(p => !p.isAI);
-    if (humanPlayers.length === 0 && pendingHumans.length === 0) {
+    const hasHumanPlayers = humanPlayers.length > 0 || pendingHumans.length > 0;
+    const hasHumanSockets = socketsInRoom && socketsInRoom.size > 0;
+
+    if (!hasHumanPlayers && !hasHumanSockets) {
+      // No human players and no spectators — destroy the room
       if (controller) {
         controller.cleanup();
         gameControllers.delete(roomId);
       }
-      // Room has only AI — destroy it
       RoomManager.deleteRoom(roomId);
     } else {
       io.to(room.id).emit('room:updated', room);
     }
   } else {
-    // Room was deleted
+    // Room was deleted by RoomManager
     if (controller) {
       controller.cleanup();
       gameControllers.delete(roomId);
@@ -285,11 +355,33 @@ function emitGameEvent(io: IOServer, roomId: string, event: string, data: unknow
       // Send personalized state to each human player
       const controller = gameControllers.get(roomId);
       if (controller) {
-        for (const player of room.players) {
-          if (!player.isAI) {
-            const personalState = controller.getSanitizedStateForPlayer(player.id);
-            if (personalState) {
-              io.to(player.id).emit(event as 'game:state', personalState);
+        // Build a set of player IDs for quick lookup
+        const playerIds = new Set(room.players.map(p => p.id));
+
+        // Get all sockets in the room (includes spectators)
+        const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+        if (socketsInRoom) {
+          for (const socketId of socketsInRoom) {
+            const isPlayer = playerIds.has(socketId);
+            if (isPlayer) {
+              // Active player — send their personalized state (with their own cards)
+              const playerSocket = io.sockets.sockets.get(socketId);
+              const player = room.players.find(p => p.id === socketId);
+              if (playerSocket && player && !player.isAI) {
+                const personalState = controller.getSanitizedStateForPlayer(socketId);
+                if (personalState) {
+                  playerSocket.emit(event as 'game:state', personalState);
+                }
+              }
+            } else {
+              // Spectator — send sanitized state (no hole cards visible)
+              const spectatorSocket = io.sockets.sockets.get(socketId);
+              if (spectatorSocket) {
+                const spectatorState = controller.getSanitizedStateForPlayer(socketId);
+                if (spectatorState) {
+                  spectatorSocket.emit(event as 'game:state', spectatorState);
+                }
+              }
             }
           }
         }
@@ -300,12 +392,31 @@ function emitGameEvent(io: IOServer, roomId: string, event: string, data: unknow
       io.to(roomId).emit('game:action', data as { playerId: string; action: PlayerAction });
       break;
     case 'game:ended': {
-      // Settle chips for human players
-      const gameState = data as any;
-      if (gameState?.winners) {
-        settleChips(roomId, gameState);
+      // Send personalized showdown state to each socket
+      // (early wins hide other players' cards; real showdowns reveal all)
+      const controller2 = gameControllers.get(roomId);
+      if (controller2) {
+        const gameState = controller2.getSanitizedStateForShowdown(room.players[0]?.id || '');
+        if (gameState?.winners) {
+          settleChips(roomId, gameState);
+        }
+
+        const playerIds2 = new Set(room.players.map(p => p.id));
+        const socketsInRoom2 = io.sockets.adapter.rooms.get(roomId);
+        if (socketsInRoom2) {
+          for (const socketId of socketsInRoom2) {
+            const sock = io.sockets.sockets.get(socketId);
+            if (!sock) continue;
+            const isPlayer2 = playerIds2.has(socketId);
+            const player2 = room.players.find(p => p.id === socketId);
+            if (isPlayer2 && player2 && player2.isAI) continue; // skip AI sockets
+            const personalState = controller2.getSanitizedStateForShowdown(socketId);
+            if (personalState) {
+              sock.emit('game:ended', personalState);
+            }
+          }
+        }
       }
-      io.to(roomId).emit('game:ended', data as any);
       // Send updated user info to each human player
       for (const player of room.players) {
         if (!player.isAI) {

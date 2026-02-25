@@ -50,7 +50,11 @@ export default function Lobby() {
   if (currentRoom && currentRoom.status === 'waiting') {
     return <RoomWaitingScreen
       room={currentRoom}
-      onAddAI={() => addAI('balanced', 'rule-based')}
+      onAddAI={() => {
+        const personalities: AIPersonality[] = ['conservative', 'balanced', 'aggressive'];
+        const pick = personalities[Math.floor(Math.random() * personalities.length)];
+        addAI(pick, 'rule-based');
+      }}
       onStart={startGame}
       onLeave={useLobbyStore.getState().leaveRoom}
     />;

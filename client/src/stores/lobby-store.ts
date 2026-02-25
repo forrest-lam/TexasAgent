@@ -57,15 +57,26 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
 
     socket.on('room:updated', (room) => {
       const state = get();
+
+      // Ignore updates if we've already left (race condition: server may broadcast
+      // room:updated before processing our socket.leave)
+      if (!state.currentRoom) return;
+
+      const myId = socket.id;
+      const inPlayers = room.players.some(p => p.id === myId);
+
       // If player was standing up and is no longer in the players list, transition to spectator
-      if (state.isStandingUp) {
-        const myId = socket.id;
-        const inPlayers = room.players.some(p => p.id === myId);
-        if (!inPlayers) {
-          set({ currentRoom: room, isSpectating: true, isSeated: false, isStandingUp: false });
-          return;
-        }
+      if (state.isStandingUp && !inPlayers) {
+        set({ currentRoom: room, isSpectating: true, isSeated: false, isStandingUp: false });
+        return;
       }
+
+      // If player was spectating/seated and now appears in the players list, game has resumed
+      if (state.isSpectating && inPlayers) {
+        set({ currentRoom: room, isSpectating: false, isSeated: false, isStandingUp: false });
+        return;
+      }
+
       set({ currentRoom: room });
     });
 
@@ -123,7 +134,7 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   leaveRoom: () => {
     const socket = getSocket();
     socket.emit('room:leave');
-    set({ isSpectating: false, isSeated: false, isStandingUp: false });
+    set({ currentRoom: null, isSpectating: false, isSeated: false, isStandingUp: false });
   },
 
   addAI: (personality: string, engineType: string) => {

@@ -15,8 +15,8 @@ interface PlayerSeatProps {
 }
 
 export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, position, isWinner }: PlayerSeatProps) {
-  // Show cards: self always, showdown for non-folded, winner always (even early win)
-  const showCards = isSelf || (phase === 'showdown' && !player.isFolded) || !!isWinner;
+  // Show cards: self always, showdown for non-folded (server controls which cards are real vs hidden)
+  const showCards = isSelf || (phase === 'showdown' && !player.isFolded);
   const { t } = useI18n();
 
   return (

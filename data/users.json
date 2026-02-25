@@ -3,11 +3,11 @@
     "id": "user_1771937346585_bt5bda",
     "username": "f0rrest",
     "passwordHash": "$2b$10$A9Rhg0xvkK/sGHHl1WHnGeNsbCcPs7qAZsCpcDAYUsqR3YZ2OxRz6",
-    "chips": 5148,
+    "chips": 3234,
     "stats": {
-      "gamesPlayed": 13,
+      "gamesPlayed": 24,
       "gamesWon": 0,
-      "totalEarnings": -170
+      "totalEarnings": -1459
     },
     "createdAt": 1771937346670,
     "llmConfig": {

@@ -84,7 +84,7 @@ export const locales: Record<Locale, Record<string, string>> = {
     'game.spectating': 'You are watching this game',
     'game.sitDown': 'Sit Down',
     'game.standUp': 'Stand Up',
-    'game.standingUp': 'You will leave at the start of the next hand',
+    'game.standingUp': 'You will start spectating at the next hand',
     'game.waitingNextRound': 'You will join at the start of the next hand',
     'game.gameOverPlayers': 'Game Over! Not enough players.',
 
@@ -199,7 +199,7 @@ export const locales: Record<Locale, Record<string, string>> = {
     'game.spectating': '你正在观战此游戏',
     'game.sitDown': '坐下',
     'game.standUp': '站起',
-    'game.standingUp': '你将在下一轮开始时离开游戏',
+    'game.standingUp': '你将在下一轮开始时进入观战',
     'game.waitingNextRound': '你将在下一轮开始时加入游戏',
     'game.gameOverPlayers': '游戏结束！玩家不足。',
 

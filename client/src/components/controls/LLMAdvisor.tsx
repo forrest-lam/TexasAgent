@@ -40,7 +40,7 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn }: LLMAdvis
   if (!configured) return null;
 
   return (
-    <div className="fixed left-2 bottom-20 sm:left-4 sm:bottom-24 z-50">
+    <div className="fixed left-2 top-14 sm:left-4 sm:top-16 z-50">
       {/* Toggle button */}
       <motion.button
         whileHover={{ scale: 1.05 }}
@@ -67,7 +67,7 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn }: LLMAdvis
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute bottom-10 sm:bottom-12 left-0 w-64 sm:w-80 max-h-48 sm:max-h-60 overflow-y-auto rounded-xl 
+            className="absolute top-10 sm:top-12 left-0 w-64 sm:w-80 max-h-48 sm:max-h-60 overflow-y-auto rounded-xl 
               bg-casino-card/95 border border-purple-500/30 backdrop-blur-md shadow-xl p-2 sm:p-3"
           >
             <div className="flex items-center justify-between mb-2">

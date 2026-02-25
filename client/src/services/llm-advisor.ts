@@ -7,6 +7,7 @@
 import { GameState, Card } from '@texas-agent/shared';
 import { getProfileSummaryForLLM } from './player-memory';
 import { useAuthStore } from '../stores/auth-store';
+import { useI18n } from '../i18n';
 
 // Fallback to env vars if user hasn't configured their own
 function getLLMConfig() {
@@ -64,7 +65,7 @@ function getPositionLabel(myIndex: number, dealerIndex: number, totalActive: num
   return 'Late Position (LP)';
 }
 
-function buildPrompt(state: GameState, myPlayerId: string): string {
+function buildPrompt(state: GameState, myPlayerId: string, locale: string): string {
   const me = state.players.find(p => p.id === myPlayerId);
   if (!me) return '';
 
@@ -95,27 +96,29 @@ function buildPrompt(state: GameState, myPlayerId: string): string {
   // Rich player behavioral data
   const playerMemory = getProfileSummaryForLLM(myPlayerId, me.name);
 
-  return `## Current Hand State
-- **Phase**: ${state.phase}
-- **My Cards**: ${myCards}
-- **Community Cards**: ${community}
-- **My Position**: ${position}
-- **My Chips**: $${me.chips} (stack/pot ratio: ${stackToPot})
-- **My Current Bet**: $${me.currentBet}
-- **Pot Size**: $${state.pot}
-- **Current Bet to Match**: $${state.currentBet}
-- **Call Amount Needed**: $${callAmount} (pot odds: ${potOdds}%)
-- **Min Raise To**: $${state.minRaise}
-- **Big Blind**: $${state.bigBlind}
-- **Players in Hand**: ${playersInHand}
+  const analysisTask = locale === 'zh'
+    ? `## 分析任务
+基于以上所有信息，特别是对手的行为画像和剥削建议：
 
-## Opponents Still in Hand
-  ${opponents}
+1. **牌力评估**：结合公共牌、听牌和outs评估我的手牌
+2. **底池赔率 vs 胜率**：跟注/加注在数学上是否盈利？
+3. **对手剥削**：如何针对每个对手的已知弱点进行剥削？
+4. **位置优势**：我的位置如何影响最优打法？
+5. **建议操作**：**弃牌**、**过牌**、**跟注**、**加注 $X** 或 **全下**
+6. **信心**：你有多确信（低/中/高）？
 
-## Player Behavioral Profiles (from tracked history)
-${playerMemory}
+重要原则：
+- 不要默认保守打法。当数学和读牌支持时要保持激进。
+- 如果对手弃牌率高，推荐诈唬和半诈唬。
+- 如果对手被动，推荐薄价值下注。
+- 有位置优势时，倾向于激进。
+- 考虑筹码/底池比来决定下注大小。
 
-## Your Analysis Task
+格式：
+**建议操作**：[操作]
+**信心**：[低/中/高]
+**理由**：[2-3句话解释原因，引用具体的对手倾向]`
+    : `## Your Analysis Task
 Based on ALL the above information, especially the opponent profiles and exploit tips:
 
 1. **Hand Strength**: Evaluate my hand considering community cards, draws, and outs
@@ -136,9 +139,44 @@ Format:
 **Recommendation**: [ACTION]
 **Confidence**: [low/medium/high]
 **Reason**: [2-3 sentences explaining WHY, referencing specific opponent tendencies]`;
+
+  return `## Current Hand State
+- **Phase**: ${state.phase}
+- **My Cards**: ${myCards}
+- **Community Cards**: ${community}
+- **My Position**: ${position}
+- **My Chips**: $${me.chips} (stack/pot ratio: ${stackToPot})
+- **My Current Bet**: $${me.currentBet}
+- **Pot Size**: $${state.pot}
+- **Current Bet to Match**: $${state.currentBet}
+- **Call Amount Needed**: $${callAmount} (pot odds: ${potOdds}%)
+- **Min Raise To**: $${state.minRaise}
+- **Big Blind**: $${state.bigBlind}
+- **Players in Hand**: ${playersInHand}
+
+## Opponents Still in Hand
+  ${opponents}
+
+## Player Behavioral Profiles (from tracked history)
+${playerMemory}
+
+${analysisTask}`;
 }
 
-const SYSTEM_PROMPT = `You are an elite Texas Hold'em poker strategist — not a cautious advisor, but an aggressive, exploitative player who maximizes EV.
+function getSystemPrompt(locale: string): string {
+  if (locale === 'zh') {
+    return `你是一位顶尖的德州扑克策略专家——不是保守的顾问，而是一个激进的、善于剥削对手弱点的玩家，追求最大化期望收益(EV)。
+
+核心原则：
+1. **无情地利用对手弱点**：如果数据显示对手弃牌率高，就诈唬他们。如果他们跟注太多，就做薄价值下注。如果他们被动，就偷池。
+2. **位置即力量**：后位时，大幅扩大你的激进范围。
+3. **激进制胜**：下注和加注有两种赢法（对手弃牌或你有最好的牌）。跟注只有一种赢法。
+4. **不要被结果导向**：如果数学支持，即使诈唬被抓也是正确的打法。
+5. **适应牌桌**：如果所有人都紧，就多偷盲。如果牌桌松散，就收紧并加大价值下注。
+
+你给出**简洁、可执行**的建议。你必须使用中文回复。`;
+  }
+  return `You are an elite Texas Hold'em poker strategist — not a cautious advisor, but an aggressive, exploitative player who maximizes EV.
 
 KEY PRINCIPLES:
 1. **Exploit opponent weaknesses ruthlessly**: If data shows a player folds too much, bluff them. If they call too much, value-bet thinner. If they're passive, steal pots.
@@ -147,19 +185,21 @@ KEY PRINCIPLES:
 4. **Don't be results-oriented**: A good bluff that gets called is still a correct play if the math supports it.
 5. **Adapt to the table**: If everyone is tight, steal more. If the table is loose, tighten up and value-bet hard.
 
-You give CONCISE, ACTIONABLE advice. Always respond in the user's language (if Chinese context detected, respond in Chinese).`;
+You give CONCISE, ACTIONABLE advice. You MUST respond in English.`;
+}
 
 export async function getAdvice(state: GameState, myPlayerId: string): Promise<string> {
   // Ensure user LLM key is loaded from server
   await loadUserLLMKey();
 
   const { apiKey, apiBaseUrl, model } = getLLMConfig();
+  const locale = useI18n.getState().locale;
 
   if (!apiKey) {
     throw new Error('API Key not configured');
   }
 
-  const prompt = buildPrompt(state, myPlayerId);
+  const prompt = buildPrompt(state, myPlayerId, locale);
   if (!prompt) throw new Error('Cannot build prompt');
 
   const response = await fetch(`${apiBaseUrl}/chat/completions`, {
@@ -171,7 +211,7 @@ export async function getAdvice(state: GameState, myPlayerId: string): Promise<s
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: getSystemPrompt(locale) },
         { role: 'user', content: prompt },
       ],
       max_tokens: 500,

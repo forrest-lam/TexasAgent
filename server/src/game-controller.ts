@@ -17,13 +17,15 @@ export class GameController {
   private actionTimer: ReturnType<typeof setTimeout> | null = null;
   private emitEvent: GameEventCallback;
   private isProcessing = false;
+  /** Queued action from a timeout that arrived while isProcessing was true */
+  private pendingTimeoutAction: { playerId: string; action: PlayerAction } | null = null;
   /** Players who timed out this hand — will be kicked before the next hand */
   private timedOutPlayers: Set<string> = new Set();
   /** Players who chose to stand up — will be removed from players list before the next hand */
   private standingPlayers: Set<string> = new Set();
   /** Callback to notify socket-handler to kick a player from the room */
   private onPlayerKick?: (playerId: string) => void;
-  /** Callback to notify socket-handler the room should be destroyed (only AI left) */
+  /** Callback to notify socket-handler the room should be destroyed (only AI left and no spectators) */
   private onRoomEmpty?: () => void;
 
   constructor(room: Room, emitEvent: GameEventCallback) {
@@ -93,6 +95,10 @@ export class GameController {
     }
 
     this.clearActionTimer();
+    // Clear any pending timeout action since the player acted manually
+    if (this.pendingTimeoutAction?.playerId === playerId) {
+      this.pendingTimeoutAction = null;
+    }
     this.processAction(playerId, action);
   }
 
@@ -266,39 +272,82 @@ export class GameController {
   }
 
   private async processAction(playerId: string, action: PlayerAction): Promise<void> {
-    if (this.isProcessing) return;
-    this.isProcessing = true;
-
-    const state = this.room.gameState!;
-    const newState = applyAction(state, playerId, action);
-    Object.assign(state, newState);
-
-    // Broadcast the action
-    this.emitEvent(this.room.id, 'game:action', { playerId, action });
-
-    // Check if only one player remains
-    const inHand = getPlayersInHand(state);
-    if (inHand.length <= 1) {
-      this.finishHand(state);
-      this.isProcessing = false;
+    if (this.isProcessing) {
+      // Queue timeout folds so they are not silently dropped
+      console.log(`[processAction] Blocked by isProcessing, queuing ${action.type} for ${playerId}`);
+      if (this.pendingTimeoutAction && this.pendingTimeoutAction.playerId === playerId) {
+        return; // already queued
+      }
+      this.pendingTimeoutAction = { playerId, action };
       return;
     }
+    this.isProcessing = true;
 
-    // Check if the betting round is over
-    if (this.isBettingRoundComplete(state)) {
-      await this.advanceToNextPhase(state);
-    } else {
-      // Move to next player
-      state.currentPlayerIndex = getNextActivePlayerIndex(state, state.currentPlayerIndex);
-      if (state.currentPlayerIndex === -1) {
+    try {
+      const state = this.room.gameState!;
+      const prevCurrentBet = state.currentBet;
+      const newState = applyAction(state, playerId, action);
+      Object.assign(state, newState);
+
+      // Track that this player has acted in the current betting round
+      if (!state.actedThisRound) state.actedThisRound = [];
+      if (action.type === 'raise') {
+        // A raise re-opens action — only the raiser has acted
+        state.actedThisRound = [playerId];
+      } else if (action.type === 'all-in' && state.currentBet > prevCurrentBet) {
+        // All-in that raises the bet re-opens action
+        state.actedThisRound = [playerId];
+      } else {
+        if (!state.actedThisRound.includes(playerId)) {
+          state.actedThisRound.push(playerId);
+        }
+      }
+
+      // Broadcast the action
+      this.emitEvent(this.room.id, 'game:action', { playerId, action });
+
+      // Check if only one player remains
+      const inHand = getPlayersInHand(state);
+      if (inHand.length <= 1) {
+        this.finishHand(state);
+        return;
+      }
+
+      // Check if the betting round is over
+      if (this.isBettingRoundComplete(state)) {
         await this.advanceToNextPhase(state);
       } else {
-        this.broadcastState(state);
-        this.scheduleNextAction(state);
+        // Move to next player
+        state.currentPlayerIndex = getNextActivePlayerIndex(state, state.currentPlayerIndex);
+        if (state.currentPlayerIndex === -1) {
+          await this.advanceToNextPhase(state);
+        } else {
+          this.broadcastState(state);
+          this.scheduleNextAction(state);
+        }
+      }
+    } catch (err) {
+      console.error(`[processAction] Error processing ${action.type} for ${playerId}:`, err);
+    } finally {
+      this.isProcessing = false;
+      this.processPendingAction();
+    }
+  }
+
+  /** Process any action that was queued while isProcessing was true */
+  private processPendingAction(): void {
+    if (this.pendingTimeoutAction) {
+      const { playerId, action } = this.pendingTimeoutAction;
+      this.pendingTimeoutAction = null;
+      // Verify it's still this player's turn
+      const state = this.room.gameState;
+      if (state) {
+        const current = state.players[state.currentPlayerIndex];
+        if (current && current.id === playerId) {
+          this.processAction(playerId, action);
+        }
       }
     }
-
-    this.isProcessing = false;
   }
 
   private isBettingRoundComplete(state: GameState): boolean {
@@ -306,53 +355,65 @@ export class GameController {
     const canAct = inHand.filter(p => !p.isAllIn);
 
     if (canAct.length === 0) return true;
-    if (canAct.length === 1 && canAct[0].currentBet >= state.currentBet) return true;
+    if (canAct.length === 1 && canAct[0].currentBet >= state.currentBet) {
+      // The lone player must have acted at least once
+      return (state.actedThisRound || []).includes(canAct[0].id);
+    }
 
-    // All players who can act have matched the current bet
-    return canAct.every(p => p.currentBet === state.currentBet);
+    // All players who can act have matched the current bet AND have acted this round
+    const allMatched = canAct.every(p => p.currentBet === state.currentBet);
+    if (!allMatched) return false;
+    const allActed = canAct.every(p => (state.actedThisRound || []).includes(p.id));
+    return allActed;
   }
 
   private async advanceToNextPhase(state: GameState): Promise<void> {
-    const inHand = getPlayersInHand(state);
-    const canAct = inHand.filter(p => !p.isAllIn);
+    try {
+      const inHand = getPlayersInHand(state);
+      const canAct = inHand.filter(p => !p.isAllIn);
 
-    // If all remaining players are all-in, deal remaining community cards
-    if (canAct.length <= 1) {
-      await this.runOutBoard(state);
-      return;
-    }
+      // If all remaining players are all-in, deal remaining community cards
+      if (canAct.length <= 1) {
+        await this.runOutBoard(state);
+        return;
+      }
 
-    const nextPhase = advancePhase(state);
+      const nextPhase = advancePhase(state);
 
-    if (nextPhase === 'showdown') {
+      if (nextPhase === 'showdown') {
+        this.finishHand(state);
+        return;
+      }
+
+      state.phase = nextPhase;
+      const resetState = resetBetsForNewRound(state);
+      Object.assign(state, resetState);
+
+      // Deal community cards
+      switch (nextPhase) {
+        case 'flop':
+          this.dealCommunityCards(state, 3);
+          break;
+        case 'turn':
+        case 'river':
+          this.dealCommunityCards(state, 1);
+          break;
+      }
+
+      // Set first player after dealer to act
+      state.currentPlayerIndex = getNextActivePlayerIndex(state, state.dealerIndex);
+      if (state.currentPlayerIndex === -1) {
+        await this.advanceToNextPhase(state);
+        return;
+      }
+
+      this.broadcastState(state);
+      this.scheduleNextAction(state);
+    } catch (err) {
+      console.error('[advanceToNextPhase] Error:', err);
+      // Emergency: finish hand to prevent stuck game
       this.finishHand(state);
-      return;
     }
-
-    state.phase = nextPhase;
-    const resetState = resetBetsForNewRound(state);
-    Object.assign(state, resetState);
-
-    // Deal community cards
-    switch (nextPhase) {
-      case 'flop':
-        this.dealCommunityCards(state, 3);
-        break;
-      case 'turn':
-      case 'river':
-        this.dealCommunityCards(state, 1);
-        break;
-    }
-
-    // Set first player after dealer to act
-    state.currentPlayerIndex = getNextActivePlayerIndex(state, state.dealerIndex);
-    if (state.currentPlayerIndex === -1) {
-      await this.advanceToNextPhase(state);
-      return;
-    }
-
-    this.broadcastState(state);
-    this.scheduleNextAction(state);
   }
 
   private async runOutBoard(state: GameState): Promise<void> {
@@ -389,7 +450,7 @@ export class GameController {
       }
     }
 
-    this.emitEvent(this.room.id, 'game:ended', this.sanitizeStateForShowdown(state));
+    this.emitEvent(this.room.id, 'game:ended', null);
 
     // Schedule next hand after delay
     setTimeout(() => {
@@ -435,17 +496,6 @@ export class GameController {
       }
       this.standingPlayers.clear();
       this.emitEvent(this.room.id, 'room:updated', this.room);
-    }
-
-    // If no human players remain, signal room destruction
-    const humanPlayers = this.room.players.filter(p => !p.isAI);
-    const pendingHumans = (this.room.pendingPlayers || []).filter(p => !p.isAI);
-    if (humanPlayers.length === 0 && pendingHumans.length === 0) {
-      this.room.status = 'waiting';
-      if (this.onRoomEmpty) {
-        this.onRoomEmpty();
-      }
-      return;
     }
 
     // Remove players with no chips
@@ -503,18 +553,29 @@ export class GameController {
       return;
     }
 
-    const action = await ai.makeDecision(state, aiPlayer.id);
+    try {
+      const action = await ai.makeDecision(state, aiPlayer.id);
 
-    // Validate AI action, fallback to fold if invalid
-    if (isValidAction(state, aiPlayer.id, action)) {
-      this.processAction(aiPlayer.id, action);
-    } else {
-      // Try simpler actions as fallback
+      // Validate AI action, fallback to fold if invalid
+      if (isValidAction(state, aiPlayer.id, action)) {
+        this.processAction(aiPlayer.id, action);
+      } else {
+        // Try simpler actions as fallback
+        const callAmount = state.currentBet - aiPlayer.currentBet;
+        if (callAmount === 0) {
+          this.processAction(aiPlayer.id, { type: 'check' });
+        } else if (aiPlayer.chips >= callAmount) {
+          this.processAction(aiPlayer.id, { type: 'call' });
+        } else {
+          this.processAction(aiPlayer.id, { type: 'fold' });
+        }
+      }
+    } catch (err) {
+      console.error(`[AI] Error during AI decision for ${aiPlayer.id}:`, err);
+      // Fallback: fold on error to prevent game from getting stuck
       const callAmount = state.currentBet - aiPlayer.currentBet;
       if (callAmount === 0) {
         this.processAction(aiPlayer.id, { type: 'check' });
-      } else if (aiPlayer.chips >= callAmount) {
-        this.processAction(aiPlayer.id, { type: 'call' });
       } else {
         this.processAction(aiPlayer.id, { type: 'fold' });
       }
@@ -523,16 +584,30 @@ export class GameController {
 
   private handlePlayerTimeout(playerId: string): void {
     const state = this.room.gameState;
-    if (!state) return;
+    if (!state) {
+      console.warn(`[Timeout] No game state for player ${playerId}`);
+      return;
+    }
 
     const currentPlayer = state.players[state.currentPlayerIndex];
-    if (!currentPlayer || currentPlayer.id !== playerId) return;
+    if (!currentPlayer || currentPlayer.id !== playerId) {
+      console.warn(`[Timeout] Not ${playerId}'s turn (current: ${currentPlayer?.id})`);
+      return;
+    }
 
-    // Mark this player for removal at the start of the next hand
-    this.timedOutPlayers.add(playerId);
+    console.log(`[Timeout] Player ${playerId} timed out, isProcessing=${this.isProcessing}`);
 
-    // Always fold on timeout (no check)
-    this.processAction(playerId, { type: 'fold' });
+    // Auto-fold on timeout (but don't kick the player — let them continue next hand)
+    const callAmount = state.currentBet - currentPlayer.currentBet;
+    const action: PlayerAction = callAmount === 0 ? { type: 'check' } : { type: 'fold' };
+
+    if (this.isProcessing) {
+      // Force-queue the timeout action — it MUST be processed
+      console.log(`[Timeout] Queuing action for ${playerId}: ${action.type}`);
+      this.pendingTimeoutAction = { playerId, action };
+    } else {
+      this.processAction(playerId, action);
+    }
   }
 
   private clearActionTimer(): void {
@@ -551,8 +626,28 @@ export class GameController {
     return sanitized;
   }
 
-  private sanitizeStateForShowdown(state: GameState): GameState {
-    return JSON.parse(JSON.stringify(state)) as GameState;
+  /**
+   * For a real showdown (multiple players), all non-folded cards are revealed.
+   * For an early win (Last Standing), only each player sees their own cards.
+   */
+  getSanitizedStateForShowdown(playerId: string): GameState | undefined {
+    const state = this.room.gameState;
+    if (!state) return undefined;
+
+    const sanitized = JSON.parse(JSON.stringify(state)) as GameState;
+    const isEarlyWin = sanitized.winners?.length === 1
+      && sanitized.winners[0].handName === 'Last Standing';
+
+    if (isEarlyWin) {
+      // Early win: hide everyone's cards except the requesting player's own
+      for (const player of sanitized.players) {
+        if (player.id !== playerId) {
+          player.cards = player.cards.map(() => ({ suit: 'spades' as const, rank: '2' as const }));
+        }
+      }
+    }
+    // Real showdown: all non-folded players' cards are visible (no hiding needed)
+    return sanitized;
   }
 
   private broadcastState(state: GameState): void {

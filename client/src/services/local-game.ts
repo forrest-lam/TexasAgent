@@ -320,6 +320,17 @@ export class LocalGameEngine {
       playSound('win');
     }
 
+    // Early win (everyone else folded): hide AI cards — no need to reveal
+    const isEarlyWin = this.state.winners?.length === 1
+      && this.state.winners[0].handName === 'Last Standing';
+    if (isEarlyWin) {
+      for (const p of this.state.players) {
+        if (p.id !== 'human') {
+          p.cards = p.cards.map(() => ({ suit: 'spades' as const, rank: '2' as const }));
+        }
+      }
+    }
+
     this.emit();
 
     // Longer delay at showdown so players can see the result

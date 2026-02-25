@@ -24,9 +24,34 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
   // Countdown timer
   const [timeLeft, setTimeLeft] = useState(timeLimit);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoFoldRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (isMyTurn) {
+    // Clear any existing auto-fold timer
+    if (autoFoldRef.current) {
+      clearTimeout(autoFoldRef.current);
+      autoFoldRef.current = null;
+    }
+
+    if (isMyTurn && !isLocal) {
+      setTimeLeft(timeLimit);
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          const next = prev - 100;
+          return next <= 0 ? 0 : next;
+        });
+      }, 100);
+      // Client-side safety net: auto-fold 2s after server timeout
+      // to prevent stuck game if server fold is not received
+      autoFoldRef.current = setTimeout(() => {
+        const callAmt = gameState.currentBet - (gameState.players.find(p => p.id === myPlayerId)?.currentBet ?? 0);
+        if (callAmt === 0) {
+          onAction({ type: 'check' });
+        } else {
+          onAction({ type: 'fold' });
+        }
+      }, timeLimit + 2000);
+    } else if (isMyTurn && isLocal) {
       setTimeLeft(timeLimit);
       timerRef.current = setInterval(() => {
         setTimeLeft(prev => {
@@ -40,6 +65,10 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (autoFoldRef.current) {
+        clearTimeout(autoFoldRef.current);
+        autoFoldRef.current = null;
+      }
     };
   }, [isMyTurn, timeLimit]);
 
@@ -77,13 +106,13 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          className="fixed bottom-0 left-0 right-0 p-2 sm:p-4 bg-gradient-to-t from-black/95 via-black/80 to-transparent backdrop-blur-md z-50"
+          className="fixed bottom-0 left-0 right-0 p-1.5 sm:p-3 bg-gradient-to-t from-black/95 via-black/80 to-transparent backdrop-blur-md z-50"
         >
-          <div className="max-w-2xl mx-auto space-y-2 sm:space-y-3">
+          <div className="max-w-2xl mx-auto space-y-1 sm:space-y-2">
             {/* Countdown timer bar — only in multiplayer mode */}
             {!isLocal && (
-              <>
-                <div className="relative w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
                   <motion.div
                     className={`absolute left-0 top-0 h-full rounded-full ${
                       timeLeft / timeLimit > 0.3 ? 'bg-gold-500' : timeLeft / timeLimit > 0.1 ? 'bg-orange-500' : 'bg-red-500'
@@ -92,14 +121,12 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
                     transition={{ duration: 0.1 }}
                   />
                 </div>
-                <div className="flex justify-end">
-                  <span className={`text-xs font-mono tabular-nums ${
-                    timeLeft / timeLimit > 0.3 ? 'text-gray-400' : timeLeft / timeLimit > 0.1 ? 'text-orange-400' : 'text-red-400'
-                  }`}>
-                    {Math.ceil(timeLeft / 1000)}s
-                  </span>
-                </div>
-              </>
+                <span className={`text-[10px] font-mono tabular-nums ${
+                  timeLeft / timeLimit > 0.3 ? 'text-gray-400' : timeLeft / timeLimit > 0.1 ? 'text-orange-400' : 'text-red-400'
+                }`}>
+                  {Math.ceil(timeLeft / 1000)}s
+                </span>
+              </div>
             )}
             {/* Raise slider panel */}
             <AnimatePresence>
@@ -110,7 +137,7 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="bg-casino-card/90 rounded-xl p-3 sm:p-4 border border-casino-border/50 space-y-2 sm:space-y-3">
+                  <div className="bg-casino-card/90 rounded-xl p-2 sm:p-3 border border-casino-border/50 space-y-1.5 sm:space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-400">{t('action.raiseTo')}:</span>
                       <span className="text-gold-400 font-bold text-base sm:text-lg">${formatChips(raiseAmount)}</span>
@@ -169,7 +196,7 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
               <div className="flex gap-2 sm:gap-3">
                 <Button
                   onClick={handleFold}
-                  className="flex-1 h-10 sm:h-12 bg-red-600/80 hover:bg-red-600 text-white font-bold text-sm sm:text-base cursor-pointer"
+                  className="flex-1 h-9 sm:h-11 bg-red-600/80 hover:bg-red-600 text-white font-bold text-sm sm:text-base cursor-pointer"
                 >
                   {t('action.fold')}
                 </Button>
@@ -177,7 +204,7 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
                 {canCheck ? (
                   <Button
                     onClick={handleCheck}
-                    className="flex-1 h-10 sm:h-12 bg-blue-600/80 hover:bg-blue-600 text-white font-bold text-sm sm:text-base cursor-pointer"
+                    className="flex-1 h-9 sm:h-11 bg-blue-600/80 hover:bg-blue-600 text-white font-bold text-sm sm:text-base cursor-pointer"
                   >
                     {t('action.check')}
                   </Button>
@@ -185,7 +212,7 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
                   <Button
                     onClick={handleCall}
                     disabled={player.chips < callAmount}
-                    className="flex-1 h-10 sm:h-12 bg-blue-600/80 hover:bg-blue-600 text-white font-bold text-sm sm:text-base
+                    className="flex-1 h-9 sm:h-11 bg-blue-600/80 hover:bg-blue-600 text-white font-bold text-sm sm:text-base
                       disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {t('action.call')} ${formatChips(callAmount)}
@@ -198,7 +225,7 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
                     setShowRaise(true);
                   }}
                   disabled={player.chips <= 0}
-                  className="flex-1 h-10 sm:h-12 bg-gold-500/90 hover:bg-gold-500 text-black font-bold text-sm sm:text-base
+                  className="flex-1 h-9 sm:h-11 bg-gold-500/90 hover:bg-gold-500 text-black font-bold text-sm sm:text-base
                     disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {t('action.raise')}

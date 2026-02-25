@@ -27,7 +27,11 @@ export class RuleBasedStrategy implements AIStrategy {
     const potOdds = calculatePotOdds(callAmount, context.pot);
 
     const positionMultiplier = this.getPositionMultiplier(context.position);
-    const adjustedStrength = handStrength * positionMultiplier;
+    // In multi-way pots, tighten up — more opponents means need stronger hand
+    const multiWayPenalty = context.numActivePlayers > 2
+      ? 1 - (context.numActivePlayers - 2) * 0.04 * this.params.tightness
+      : 1;
+    const adjustedStrength = handStrength * positionMultiplier * Math.max(multiWayPenalty, 0.75);
 
     const ev = this.calculateEV(adjustedStrength, context.pot, callAmount, potOdds);
 
@@ -63,7 +67,9 @@ export class RuleBasedStrategy implements AIStrategy {
     context: AIDecisionContext
   ): PlayerAction {
     const shouldBluff = Math.random() < this.params.bluffFrequency;
+    const callRatio = callAmount / context.playerChips; // what fraction of stack is the call
 
+    // === No bet to call: check or raise ===
     if (callAmount === 0) {
       if (strength >= this.params.raiseThreshold || shouldBluff) {
         const raiseAmount = this.calculateRaiseAmount(strength, context);
@@ -72,15 +78,25 @@ export class RuleBasedStrategy implements AIStrategy {
       return { type: 'check' };
     }
 
+    // === Must call: fold / call / raise / all-in ===
+
+    // Fold conditions — more willing to fold with weak hands
     if (strength < this.params.foldThreshold && !shouldBluff) {
-      if (callAmount > context.playerChips * 0.3) {
+      // Large bet relative to stack → fold weak hands
+      if (callRatio > 0.2) {
         return { type: 'fold' };
       }
+      // Negative EV and we respect pot odds → fold
       if (ev < 0 && this.params.potOddsWeight > 0.5) {
+        return { type: 'fold' };
+      }
+      // Even small bets: fold very weak hands (well below threshold)
+      if (strength < this.params.foldThreshold * 0.7) {
         return { type: 'fold' };
       }
     }
 
+    // Raise with strong hands or occasional bluff
     if (strength >= this.params.raiseThreshold || (shouldBluff && Math.random() < this.params.aggressiveness)) {
       if (context.playerChips <= callAmount) {
         return { type: 'all-in' };
@@ -89,10 +105,16 @@ export class RuleBasedStrategy implements AIStrategy {
       return { type: 'raise', amount: raiseAmount };
     }
 
+    // Facing all-in (call would use entire stack): need a very strong hand
     if (callAmount >= context.playerChips) {
-      if (strength >= this.params.foldThreshold + 0.1) {
+      if (strength >= this.params.raiseThreshold * 0.95) {
         return { type: 'all-in' };
       }
+      return { type: 'fold' };
+    }
+
+    // Large bet (>30% stack): only call with decent hand
+    if (callRatio > 0.3 && strength < this.params.foldThreshold + 0.15) {
       return { type: 'fold' };
     }
 
@@ -103,11 +125,18 @@ export class RuleBasedStrategy implements AIStrategy {
     const minRaise = context.minRaise;
     const maxRaise = context.playerChips + context.playerBet;
 
-    const potPercentage = 0.5 + strength * this.params.aggressiveness;
+    // Base raise: 25%-60% pot depending on hand strength and aggressiveness
+    const potPercentage = 0.25 + strength * this.params.aggressiveness * 0.55;
     let raiseAmount = Math.floor(context.pot * potPercentage);
 
     raiseAmount = Math.max(raiseAmount, minRaise);
     raiseAmount = Math.min(raiseAmount, maxRaise);
+
+    // Cap raise at 40% of stack to avoid over-committing with medium hands
+    if (strength < this.params.raiseThreshold + 0.15) {
+      raiseAmount = Math.min(raiseAmount, Math.floor(context.playerChips * 0.4));
+      raiseAmount = Math.max(raiseAmount, minRaise);
+    }
 
     const jitter = 1 + (Math.random() - 0.5) * 0.1;
     raiseAmount = Math.floor(raiseAmount * jitter);

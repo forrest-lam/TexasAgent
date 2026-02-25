@@ -192,7 +192,7 @@ export default function Game() {
 
   // Spectator mode: player is watching but not in the game
   const { isSpectating, isSeated, isStandingUp, sitDown, standUp } = useLobbyStore();
-  const isSpectator = !isLocal && gameState && !gameState.players.find(p => p.id === myPlayerId);
+  const isSpectator = !isLocal && (isSpectating || (gameState && !gameState.players.find(p => p.id === myPlayerId)));
 
   return (
     <div className="h-screen w-screen bg-casino-bg overflow-hidden relative">
