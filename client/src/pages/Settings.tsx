@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' :
 export default function Settings() {
   const t = useTranslation();
   const navigate = useNavigate();
-  const { token, user } = useAuthStore();
+  const { token, user, restoreSession } = useAuthStore();
   const [apiKey, setApiKey] = useState('');
   const [apiBaseUrl, setApiBaseUrl] = useState('https://api.openai.com/v1');
   const [model, setModel] = useState('gpt-4o-mini');
@@ -43,6 +43,8 @@ export default function Settings() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       });
+      // Refresh user info in auth store so hasApiKey is updated everywhere
+      await restoreSession();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {}
@@ -53,11 +55,11 @@ export default function Settings() {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 p-4">
       <div className="max-w-lg mx-auto">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-1 text-gray-400 hover:text-white mb-6 transition-colors"
         >
           <ArrowLeft size={18} />
-          {t('game.lobby')}
+          {t('settings.back')}
         </button>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>

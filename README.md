@@ -53,7 +53,7 @@
 - **中途加入** — 玩家可以观战正在进行的游戏，点击"坐下"等待下一轮开始时自动加入
 - **站起/观战** — 参与游戏的玩家可点击"站起"，在下一轮开始时进入观战状态，AI 玩家继续自动对局，观战者可随时点击"坐下"重新加入
 - **观战者列表** — 游戏界面左上角实时显示当前房间的观战者名单
-- **房间自动清理** — 当房间内所有真实玩家离开（非观战）且无观战者时，房间自动销毁；仅剩 AI 时只要有观战者房间就保持运行
+- **房间自动清理** — 当房间内所有真实玩家离开（非观战）且无观战者时，房间自动销毁；仅剩 AI 时游戏自动停止并进入等待状态，观战者可坐下开始新局
 - **玩家行为画像** — 记录所有玩家（包括 AI）的行为数据，使用稳定的玩家名称作为键存储在客户端 localStorage，跨会话持久化
 - **移动端适配** — 全页面响应式设计，手机端自适应缩放（牌桌/座位/卡牌/操作面板/顶栏均针对小屏优化）
 
@@ -106,22 +106,20 @@ npm install
 
 ### 配置 LLM（可选）
 
+LLM 请求通过**服务端代理**（`POST /api/llm/chat`）转发，API Key 不会暴露到前端浏览器。
+
 **方式一：用户界面配置（推荐）**
 
 注册登录后，进入**设置页面**即可配置个人 API Key、Base URL 和 Model，配置存储在服务端。
 
-**方式二：环境变量全局配置**
+**方式二：服务端环境变量全局配置**
 
-复制环境变量文件并填入你的 API Key（作为 fallback）：
-
-```bash
-cp client/.env.example client/.env
-```
+作为全局 fallback（当用户未配置个人 API Key 时生效）：
 
 ```env
-VITE_LLM_API_KEY=sk-your-api-key
-VITE_LLM_API_BASE_URL=https://api.openai.com/v1
-VITE_LLM_MODEL=gpt-4o-mini
+LLM_API_KEY=sk-your-api-key
+LLM_API_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o-mini
 ```
 
 > 支持任何 OpenAI 兼容 API（DeepSeek、Ollama 等），不配置也可正常游戏，仅 LLM 顾问和 LLM AI 引擎不可用。
@@ -156,9 +154,9 @@ docker run -d -p 3001:3001 --name texas-agent texas-agent
 
 > 生产环境下前端 API 请求自动使用相对路径（与页面同源），无需额外配置。如需指定后端地址，可在 Docker 构建时传入：`docker build --build-arg VITE_SERVER_URL=http://your-server:3001 -t texas-agent .`
 >
-> 如需内置 LLM 顾问（免去每个用户自行配置），可在构建时传入 LLM 参数：
+> 如需内置 LLM 顾问（免去每个用户自行配置），可通过环境变量传入：
 > ```bash
-> docker build --build-arg VITE_LLM_API_KEY=sk-xxx --build-arg VITE_LLM_API_BASE_URL=https://api.openai.com/v1 --build-arg VITE_LLM_MODEL=gpt-4o-mini -t texas-agent .
+> docker run -d -p 3001:3001 -e LLM_API_KEY=sk-xxx -e LLM_API_BASE_URL=https://api.openai.com/v1 -e LLM_MODEL=gpt-4o-mini --name texas-agent texas-agent
 > ```
 
 如需 Nginx 反代，注意配置 WebSocket 转发：

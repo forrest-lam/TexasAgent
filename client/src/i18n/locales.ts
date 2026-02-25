@@ -102,6 +102,7 @@ export const locales: Record<Locale, Record<string, string>> = {
 
     // Settings
     'settings.language': 'Language',
+    'settings.back': 'Back',
     'settings.title': 'Settings',
     'settings.llmConfig': 'LLM Configuration',
     'settings.apiKey': 'API Key',
@@ -222,6 +223,7 @@ export const locales: Record<Locale, Record<string, string>> = {
 
     // Settings
     'settings.language': '语言',
+    'settings.back': '返回',
     'settings.title': '设置',
     'settings.llmConfig': 'LLM 配置',
     'settings.apiKey': 'API Key',

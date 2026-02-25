@@ -36,6 +36,7 @@ export function setupSocketHandlers(io: IOServer): void {
       playerRooms.set(socket.id, room.id);
       socket.emit('room:joined', room);
       broadcastRoomList(io);
+      console.log(`[Room] Created: "${room.name}" (${room.id}) by ${username}`);
     });
 
     // Join room
@@ -52,6 +53,7 @@ export function setupSocketHandlers(io: IOServer): void {
         socket.emit('room:joined', room);
         io.to(room.id).emit('room:updated', room);
         broadcastRoomList(io);
+        console.log(`[Room] ${username} joined room "${room.name}" (${room.id}) — players: ${room.players.length}`);
       } catch (err: any) {
         socket.emit('error', err.message);
       }
@@ -72,6 +74,7 @@ export function setupSocketHandlers(io: IOServer): void {
         socket.emit('room:spectating', room);
         // Broadcast updated spectator list to the room
         io.to(room.id).emit('room:updated', room);
+        console.log(`[Room] ${username} spectating room "${room.name}" (${room.id})`);
         // Also send current game state (sanitized — no hole cards visible)
         const controller = gameControllers.get(roomId);
         if (controller) {
@@ -102,6 +105,7 @@ export function setupSocketHandlers(io: IOServer): void {
         socket.emit('room:seated');
         io.to(room.id).emit('room:updated', room);
         broadcastRoomList(io);
+        console.log(`[Room] ${username} sat down in room "${room.name}" (${room.id}) — players: ${room.players.length}, pending: ${room.pendingPlayers?.length ?? 0}`);
 
         // If the room is waiting (game paused) and there are enough players to resume,
         // merge pending players and auto-start a new game
@@ -141,6 +145,7 @@ export function setupSocketHandlers(io: IOServer): void {
               }
             });
             controller.setOnRoomEmpty(() => {
+              console.log(`[Room] onRoomEmpty triggered for room ${roomId} (auto-restart) — cleaning up controller`);
               controller!.cleanup();
               gameControllers.delete(roomId);
 
@@ -183,6 +188,7 @@ export function setupSocketHandlers(io: IOServer): void {
       if (controller) {
         controller.handlePlayerStand(socket.id);
         socket.emit('room:stood-up');
+        console.log(`[Room] ${username} stood up in room ${roomId}`);
       }
     });
 
@@ -246,6 +252,7 @@ export function setupSocketHandlers(io: IOServer): void {
       // Register callback for when only AI players remain in the players list
       controller.setOnRoomEmpty(() => {
         // Always cleanup the controller — no point in AI-only games continuing
+        console.log(`[Room] onRoomEmpty triggered for room ${roomId} — cleaning up controller`);
         controller.cleanup();
         gameControllers.delete(roomId);
 
@@ -264,6 +271,7 @@ export function setupSocketHandlers(io: IOServer): void {
       gameControllers.set(roomId, controller);
 
       controller.startGame();
+      console.log(`[Room] Game started in room "${room.name}" (${room.id}) — ${room.players.length} players`);
 
       // Broadcast room status update so clients navigate to the game page
       io.to(room.id).emit('room:updated', room);
@@ -324,6 +332,9 @@ function handleLeaveRoom(io: IOServer, socket: IOSocket): void {
   const roomId = playerRooms.get(socket.id);
   if (!roomId) return;
 
+  const username = (socket as any).data?.username || socket.id;
+  console.log(`[Room] ${username} leaving room ${roomId}`);
+
   // Leave the socket room FIRST so subsequent broadcasts don't reach the leaving player
   socket.leave(roomId);
   playerRooms.delete(socket.id);
@@ -347,6 +358,7 @@ function handleLeaveRoom(io: IOServer, socket: IOSocket): void {
 
     if (!hasHumanPlayers && !hasHumanSockets) {
       // No human players and no spectators — destroy the room
+      console.log(`[Room] Destroying room ${roomId} — no human players or spectators remaining`);
       if (controller) {
         controller.cleanup();
         gameControllers.delete(roomId);

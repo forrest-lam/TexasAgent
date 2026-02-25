@@ -76,67 +76,67 @@ const SEAT_POSITIONS_DESKTOP: Record<number, { x: string; y: string }[]> = {
   ],
 };
 
-// Mobile seat positions — shifted slightly left to prevent right-side clipping in portrait mode
+// Mobile seat positions — shifted left to prevent right-side clipping in portrait mode
 const SEAT_POSITIONS_MOBILE: Record<number, { x: string; y: string }[]> = {
   2: [
-    { x: '47%', y: '78%' },
-    { x: '47%', y: '12%' },
+    { x: '44%', y: '78%' },
+    { x: '44%', y: '12%' },
   ],
   3: [
-    { x: '47%', y: '78%' },
-    { x: '16%', y: '30%' },
-    { x: '78%', y: '30%' },
+    { x: '44%', y: '78%' },
+    { x: '13%', y: '30%' },
+    { x: '75%', y: '30%' },
   ],
   4: [
-    { x: '47%', y: '78%' },
-    { x: '13%', y: '50%' },
-    { x: '47%', y: '12%' },
-    { x: '82%', y: '50%' },
+    { x: '44%', y: '78%' },
+    { x: '10%', y: '50%' },
+    { x: '44%', y: '12%' },
+    { x: '79%', y: '50%' },
   ],
   5: [
-    { x: '47%', y: '78%' },
-    { x: '13%', y: '60%' },
-    { x: '20%', y: '15%' },
-    { x: '75%', y: '15%' },
-    { x: '82%', y: '60%' },
+    { x: '44%', y: '78%' },
+    { x: '10%', y: '60%' },
+    { x: '17%', y: '15%' },
+    { x: '72%', y: '15%' },
+    { x: '79%', y: '60%' },
   ],
   6: [
-    { x: '47%', y: '78%' },
-    { x: '11%', y: '60%' },
-    { x: '16%', y: '15%' },
-    { x: '47%', y: '8%' },
-    { x: '78%', y: '15%' },
-    { x: '84%', y: '60%' },
+    { x: '44%', y: '78%' },
+    { x: '8%', y: '60%' },
+    { x: '13%', y: '15%' },
+    { x: '44%', y: '8%' },
+    { x: '75%', y: '15%' },
+    { x: '81%', y: '60%' },
   ],
   7: [
-    { x: '47%', y: '80%' },
-    { x: '11%', y: '65%' },
-    { x: '11%', y: '30%' },
-    { x: '30%', y: '8%' },
-    { x: '65%', y: '8%' },
-    { x: '84%', y: '30%' },
-    { x: '84%', y: '65%' },
+    { x: '44%', y: '80%' },
+    { x: '8%', y: '65%' },
+    { x: '8%', y: '30%' },
+    { x: '27%', y: '8%' },
+    { x: '62%', y: '8%' },
+    { x: '81%', y: '30%' },
+    { x: '81%', y: '65%' },
   ],
   8: [
-    { x: '47%', y: '80%' },
-    { x: '13%', y: '72%' },
-    { x: '10%', y: '40%' },
-    { x: '20%', y: '10%' },
-    { x: '47%', y: '5%' },
-    { x: '75%', y: '10%' },
-    { x: '85%', y: '40%' },
-    { x: '82%', y: '72%' },
+    { x: '44%', y: '80%' },
+    { x: '10%', y: '72%' },
+    { x: '7%', y: '40%' },
+    { x: '17%', y: '10%' },
+    { x: '44%', y: '5%' },
+    { x: '72%', y: '10%' },
+    { x: '82%', y: '40%' },
+    { x: '79%', y: '72%' },
   ],
   9: [
-    { x: '47%', y: '80%' },
-    { x: '13%', y: '75%' },
-    { x: '10%', y: '45%' },
-    { x: '16%', y: '12%' },
-    { x: '38%', y: '5%' },
-    { x: '57%', y: '5%' },
-    { x: '79%', y: '12%' },
-    { x: '85%', y: '45%' },
-    { x: '82%', y: '75%' },
+    { x: '44%', y: '80%' },
+    { x: '10%', y: '75%' },
+    { x: '7%', y: '45%' },
+    { x: '13%', y: '12%' },
+    { x: '35%', y: '5%' },
+    { x: '54%', y: '5%' },
+    { x: '76%', y: '12%' },
+    { x: '82%', y: '45%' },
+    { x: '79%', y: '75%' },
   ],
 };
 
@@ -216,8 +216,8 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
 
   return (
     <div className={`relative w-full h-full ${screenShake ? 'screen-shake' : ''}`}>
-      {/* Table surface — shifted slightly left on mobile to match seat layout */}
-      <div className="absolute inset-[2%] sm:inset-[5%] max-sm:-translate-x-[1.5%] rounded-[50%] bg-felt-gradient shadow-2xl border-4 sm:border-8 border-amber-900/60"
+      {/* Table surface — shifted left on mobile to match seat layout */}
+      <div className="absolute inset-[2%] sm:inset-[5%] max-sm:-translate-x-[3%] rounded-[50%] bg-felt-gradient shadow-2xl border-4 sm:border-8 border-amber-900/60"
         style={{ boxShadow: 'inset 0 0 60px rgba(0,0,0,0.4), 0 0 40px rgba(0,0,0,0.6)' }}
       >
         {/* Inner rail */}

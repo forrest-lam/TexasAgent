@@ -45,13 +45,19 @@ function cardToString(card: Card): string {
   return `${card.rank}${suitMap[card.suit] || card.suit}`;
 }
 
-function getPositionLabel(myIndex: number, dealerIndex: number, totalActive: number): string {
-  const relPos = (myIndex - dealerIndex + totalActive) % totalActive;
+function getPositionLabel(me: { isDealer?: boolean; isSmallBlind?: boolean; isBigBlind?: boolean }, myIndex: number, dealerIndex: number, totalPlayers: number): string {
+  // Prefer authoritative flags set by the server
+  if (me.isBigBlind) return 'Big Blind (BB)';
+  if (me.isSmallBlind) return 'Small Blind (SB)';
+  if (me.isDealer) return 'Dealer (BTN)';
+
+  // Fallback: compute relative position using the full players array size
+  const relPos = (myIndex - dealerIndex + totalPlayers) % totalPlayers;
   if (relPos === 0) return 'Dealer (BTN)';
   if (relPos === 1) return 'Small Blind (SB)';
   if (relPos === 2) return 'Big Blind (BB)';
-  if (relPos <= totalActive * 0.4) return 'Early Position (EP)';
-  if (relPos <= totalActive * 0.7) return 'Middle Position (MP)';
+  if (relPos <= totalPlayers * 0.4) return 'Early Position (EP)';
+  if (relPos <= totalPlayers * 0.7) return 'Middle Position (MP)';
   return 'Late Position (LP)';
 }
 
@@ -64,10 +70,9 @@ function buildPrompt(state: GameState, myPlayerId: string, locale: string, handA
   const callAmount = state.currentBet - me.currentBet;
   const potOdds = callAmount > 0 ? (callAmount / (state.pot + callAmount) * 100).toFixed(1) : '0';
 
-  // Position info
-  const activePlayers = state.players.filter(p => p.isActive && !p.isFolded);
+  // Position info — use server-set flags (isDealer/isSB/isBB) as primary source
   const myIdx = state.players.findIndex(p => p.id === myPlayerId);
-  const position = getPositionLabel(myIdx, state.dealerIndex || 0, activePlayers.length);
+  const position = getPositionLabel(me, myIdx, state.dealerIndex || 0, state.players.filter(p => p.isActive).length);
 
   // Build opponents info with more detail
   const opponents = state.players
