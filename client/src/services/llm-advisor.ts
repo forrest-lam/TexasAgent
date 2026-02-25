@@ -10,33 +10,27 @@ import { useAuthStore } from '../stores/auth-store';
 import { useI18n } from '../i18n';
 import type { HandAction } from '../stores/game-store';
 
-// Fallback to env vars if user hasn't configured their own
-function getLLMConfig() {
-  const user = useAuthStore.getState().user;
-  const token = useAuthStore.getState().token;
-  const envKey = import.meta.env.VITE_LLM_API_KEY as string || '';
-  return {
-    apiKey: envKey,
-    hasServerKey: !!user?.llmConfig?.hasApiKey,
-    token,
-  };
+function getAuthToken(): string {
+  return useAuthStore.getState().token || '';
 }
 
+/**
+ * Whether LLM advisor might be available.
+ * Since API key can be configured on the server side (env var),
+ * we can't fully know on the client — so we always return true
+ * as long as the user is authenticated, and let the server
+ * return an error if no key is actually configured.
+ */
 export function isLLMConfigured(): boolean {
-  const { apiKey, hasServerKey } = getLLMConfig();
-  return !!apiKey || hasServerKey;
+  return !!getAuthToken();
 }
 
-/** Check if an API key is actually available (env var or server-side config) */
 export function hasLLMApiKey(): boolean {
-  const { apiKey, hasServerKey } = getLLMConfig();
-  return !!apiKey || hasServerKey;
+  return !!getAuthToken();
 }
 
-// loadUserLLMKey is no longer needed — API key stays on the server
-export async function loadUserLLMKey(): Promise<void> {
-  // No-op: kept for backward compatibility with callers
-}
+// No-op: kept for backward compatibility with callers
+export async function loadUserLLMKey(): Promise<void> {}
 
 function cardToString(card: Card): string {
   const suitMap: Record<string, string> = {
@@ -240,7 +234,7 @@ export interface AdvisorSuggestion {
 }
 
 export async function getAdvice(state: GameState, myPlayerId: string, handActions: HandAction[] = []): Promise<AdvisorSuggestion[]> {
-  const { token } = getLLMConfig();
+  const token = getAuthToken();
   const locale = useI18n.getState().locale;
 
   if (!token) {

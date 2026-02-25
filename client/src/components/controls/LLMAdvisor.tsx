@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { GameState, PlayerAction } from '@texas-agent/shared';
-import { isLLMConfigured, hasLLMApiKey, getAdvice, AdvisorSuggestion } from '../../services/llm-advisor';
+import { hasLLMApiKey, getAdvice, AdvisorSuggestion } from '../../services/llm-advisor';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, X, Loader2, Play, Settings } from 'lucide-react';
 import { useI18n } from '../../i18n';
@@ -92,17 +92,10 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
   const handActions = useGameStore(s => s.handActions);
   const navigate = useNavigate();
 
-  const configured = isLLMConfigured();
   const hasKey = hasLLMApiKey();
 
   const handleGetAdvice = async () => {
     if (loading) return;
-    // If no API key at all, show prompt to configure
-    if (!hasKey) {
-      setShowNoKey(true);
-      setExpanded(true);
-      return;
-    }
     setShowNoKey(false);
     setLoading(true);
     setError(null);
@@ -112,7 +105,14 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
       const result = await getAdvice(gameState, myPlayerId, handActions);
       setSuggestions(result);
     } catch (e: any) {
-      setError(e.message || t('advisor.error'));
+      const msg = e.message || '';
+      // If server says no API key, show the config prompt
+      if (msg.toLowerCase().includes('api key') || msg.toLowerCase().includes('no api key')) {
+        setShowNoKey(true);
+        setLoading(false);
+        return;
+      }
+      setError(msg || t('advisor.error'));
     } finally {
       setLoading(false);
     }
