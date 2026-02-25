@@ -137,7 +137,7 @@ npm run dev:client   # http://localhost:5173
 npm run dev:server   # http://localhost:3001
 ```
 
-单人模式只需启动客户端，多人在线需要同时启动服务端。
+单人模式只需启动客户端，多人在线需要同时启动服务端。开发模式下支持局域网 IP 访问（手机等设备通过 `http://局域网IP:5173` 即可连接，CORS 和 API 地址自动适配）。
 
 ### 生产环境部署
 

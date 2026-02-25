@@ -18,19 +18,30 @@ const httpServer = createServer(app);
 const IS_PROD = process.env.NODE_ENV === 'production';
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:5173', 'http://localhost:3000'];
+  : null; // null = use permissive callback below in dev mode
+
+/**
+ * In dev mode with no explicit ALLOWED_ORIGINS, accept any origin so that
+ * LAN-IP access (e.g. http://192.168.x.x:5173) works out of the box.
+ */
+const corsOrigin: cors.CorsOptions['origin'] = IS_PROD
+  ? '*'
+  : ALLOWED_ORIGINS
+    ? ALLOWED_ORIGINS
+    : (_origin, callback) => callback(null, true);
 
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: {
-    origin: IS_PROD ? '*' : ALLOWED_ORIGINS,
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
 // Socket authentication
 io.use(socketAuthMiddleware);
 
-app.use(cors({ origin: IS_PROD ? '*' : ALLOWED_ORIGINS }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => {

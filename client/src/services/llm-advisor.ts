@@ -45,7 +45,7 @@ export async function loadUserLLMKey(): Promise<void> {
   const { token } = getLLMConfig();
   if (!token || (window as any).__userLLMApiKey) return;
   try {
-    const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3001');
+    const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : `http://${window.location.hostname}:3001`);
     const res = await fetch(`${API_BASE}/api/user/llm-config/full`, {
       headers: { Authorization: `Bearer ${token}` },
     });

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { AuthResponse } from '@texas-agent/shared';
 
-const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3001');
+const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : `http://${window.location.hostname}:3001`);
 
 interface AuthState {
   token: string | null;
