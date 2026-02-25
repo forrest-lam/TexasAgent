@@ -151,6 +151,8 @@ docker build -t texas-agent .
 docker run -d -p 3001:3001 --name texas-agent texas-agent
 ```
 
+> 生产环境下前端 API 请求自动使用相对路径（与页面同源），无需额外配置。如需指定后端地址，可在 Docker 构建时传入：`docker build --build-arg VITE_SERVER_URL=http://your-server:3001 -t texas-agent .`
+
 如需 Nginx 反代，注意配置 WebSocket 转发：
 
 ```nginx

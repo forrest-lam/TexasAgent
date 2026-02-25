@@ -5,7 +5,7 @@ import { ArrowLeft, Save, Check } from 'lucide-react';
 import { useAuthStore } from '../stores/auth-store';
 import { useTranslation } from '../i18n';
 
-const API_BASE = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3001');
 
 export default function Settings() {
   const t = useTranslation();

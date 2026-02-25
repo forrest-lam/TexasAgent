@@ -104,7 +104,7 @@ export default function Game() {
           const { user, token, updateUser } = useAuthStore.getState();
           if (user && token) {
             // Update user chips to match current in-game chips
-            const API_BASE = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+            const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3001');
             const newChips = human.chips;
             fetch(`${API_BASE}/api/auth/me`, {
               headers: { Authorization: `Bearer ${token}` },

@@ -17,7 +17,9 @@ COPY shared/ shared/
 COPY server/ server/
 COPY client/ client/
 
-# Build client
+# Build client (use empty VITE_SERVER_URL so API calls use relative paths in production)
+ARG VITE_SERVER_URL=""
+ENV VITE_SERVER_URL=$VITE_SERVER_URL
 RUN npm run build --workspace=client
 
 # Expose port
