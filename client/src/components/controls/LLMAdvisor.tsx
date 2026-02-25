@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { GameState, PlayerAction } from '@texas-agent/shared';
-import { isLLMConfigured, getAdvice } from '../../services/llm-advisor';
+import { isLLMConfigured, getAdvice, AdvisorSuggestion } from '../../services/llm-advisor';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, X, Loader2, Play } from 'lucide-react';
 import { useI18n } from '../../i18n';
@@ -14,30 +14,25 @@ interface LLMAdvisorProps {
 }
 
 /**
- * Parse the LLM advice text to extract a recommended PlayerAction.
- * Handles both English and Chinese formats from the prompt template.
+ * Parse a raw action text from the LLM into a PlayerAction.
+ * Handles both English and Chinese formats.
  */
-function parseRecommendedAction(advice: string, gameState: GameState, myPlayerId: string): PlayerAction | null {
-  const text = advice.toUpperCase();
-
-  // Try to find the recommendation line (EN: **Recommendation**: ... / ZH: **建议操作**：...)
-  const recMatch = advice.match(/\*\*(?:Recommendation|建议操作)\*\*[：:]\s*(.+)/i);
-  const recLine = recMatch ? recMatch[1].toUpperCase() : text;
+function parseActionText(actionText: string, gameState: GameState, myPlayerId: string): PlayerAction | null {
+  const text = actionText.toUpperCase();
 
   const player = gameState.players.find(p => p.id === myPlayerId);
   if (!player) return null;
 
-  // ALL-IN check first (before other patterns)
-  if (/ALL[\s-]?IN|全[下押]/.test(recLine)) {
+  // ALL-IN check first
+  if (/ALL[\s-]?IN|全[下押]/.test(text)) {
     return { type: 'all-in' };
   }
 
   // RAISE $X — extract amount
-  const raiseMatch = recLine.match(/(?:RAISE|加注)[^$\d]*\$?\s*(\d[\d,]*)/);
+  const raiseMatch = text.match(/(?:RAISE|加注)[^$\d]*\$?\s*(\d[\d,]*)/);
   if (raiseMatch) {
     const amount = parseInt(raiseMatch[1].replace(/,/g, ''), 10);
     if (!isNaN(amount) && amount > 0) {
-      // If the raise amount would be all-in
       if (amount >= player.chips + player.currentBet) {
         return { type: 'all-in' };
       }
@@ -46,22 +41,22 @@ function parseRecommendedAction(advice: string, gameState: GameState, myPlayerId
   }
 
   // Simple RAISE without amount — use min raise
-  if (/RAISE|加注/.test(recLine)) {
+  if (/RAISE|加注/.test(text)) {
     return { type: 'raise', amount: gameState.minRaise };
   }
 
   // CALL
-  if (/\bCALL\b|跟注/.test(recLine)) {
+  if (/\bCALL\b|跟注/.test(text)) {
     return { type: 'call' };
   }
 
   // CHECK
-  if (/\bCHECK\b|过牌/.test(recLine)) {
+  if (/\bCHECK\b|过牌/.test(text)) {
     return { type: 'check' };
   }
 
   // FOLD
-  if (/\bFOLD\b|弃牌/.test(recLine)) {
+  if (/\bFOLD\b|弃牌/.test(text)) {
     return { type: 'fold' };
   }
 
@@ -79,8 +74,15 @@ function getActionLabel(action: PlayerAction, t: (key: string) => string): strin
   }
 }
 
+/** Color class for probability badge */
+function getProbColor(prob: number): string {
+  if (prob >= 60) return 'bg-green-600/80 text-green-100';
+  if (prob >= 40) return 'bg-yellow-600/80 text-yellow-100';
+  return 'bg-gray-600/80 text-gray-200';
+}
+
 export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }: LLMAdvisorProps) {
-  const [advice, setAdvice] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<AdvisorSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -93,11 +95,11 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
     if (!configured || loading) return;
     setLoading(true);
     setError(null);
-    setAdvice(null);
+    setSuggestions([]);
     setExpanded(true);
     try {
       const result = await getAdvice(gameState, myPlayerId, handActions);
-      setAdvice(result);
+      setSuggestions(result);
     } catch (e: any) {
       setError(e.message || t('advisor.error'));
     } finally {
@@ -105,7 +107,6 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
     }
   };
 
-  // Don't show if not configured
   if (!configured) return null;
 
   return (
@@ -131,13 +132,13 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
 
       {/* Advice panel */}
       <AnimatePresence>
-        {expanded && (advice || loading || error) && (
+        {expanded && (suggestions.length > 0 || loading || error) && (
           <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute top-10 sm:top-12 left-0 w-64 sm:w-80 max-h-48 sm:max-h-60 overflow-y-auto rounded-xl 
-              bg-casino-card/95 border border-purple-500/30 backdrop-blur-md shadow-xl p-2 sm:p-3"
+            className="absolute top-10 sm:top-12 left-0 w-72 sm:w-[340px] max-h-64 sm:max-h-80 overflow-y-auto rounded-xl 
+              bg-casino-card/95 border border-purple-500/30 backdrop-blur-md shadow-xl p-2.5 sm:p-3"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
@@ -163,36 +164,68 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
               <p className="text-red-400 text-xs">{error}</p>
             )}
 
-            {advice && (
-              <>
-                <div className="text-xs text-gray-200 leading-relaxed whitespace-pre-wrap">
-                  {advice}
-                </div>
-
-                {/* Follow advice button */}
-                {isMyTurn && onAction && (() => {
-                  const parsed = parseRecommendedAction(advice, gameState, myPlayerId);
-                  if (!parsed) return null;
+            {suggestions.length > 0 && (
+              <div className="space-y-2">
+                {suggestions.map((suggestion, idx) => {
+                  const parsed = parseActionText(suggestion.action, gameState, myPlayerId);
                   return (
-                    <button
-                      onClick={() => {
-                        onAction(parsed);
-                        setExpanded(false);
-                      }}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg
-                        bg-purple-600/80 hover:bg-purple-600 text-white text-xs font-semibold
-                        transition-colors cursor-pointer border border-purple-400/30"
+                    <div
+                      key={idx}
+                      className={`rounded-lg border p-2 transition-colors ${
+                        idx === 0
+                          ? 'border-purple-500/40 bg-purple-900/20'
+                          : 'border-casino-border/40 bg-casino-felt/20'
+                      }`}
                     >
-                      <Play size={12} />
-                      {t('advisor.follow')}: {getActionLabel(parsed, t)}
-                    </button>
+                      {/* Header: label + probability badge */}
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+                          {idx === 0 ? t('advisor.primary') : t('advisor.alternative')}
+                        </span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${getProbColor(suggestion.probability)}`}>
+                          {suggestion.probability}%
+                        </span>
+                      </div>
+
+                      {/* Action text */}
+                      <div className="text-xs font-semibold text-white mb-1">
+                        {suggestion.action}
+                      </div>
+
+                      {/* Reason */}
+                      {suggestion.reason && (
+                        <div className="text-[10px] sm:text-xs text-gray-300 leading-relaxed mb-1.5">
+                          {suggestion.reason}
+                        </div>
+                      )}
+
+                      {/* Follow button */}
+                      {isMyTurn && onAction && parsed && (
+                        <button
+                          onClick={() => {
+                            onAction(parsed);
+                            setExpanded(false);
+                          }}
+                          className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg
+                            text-white text-[10px] sm:text-xs font-semibold
+                            transition-colors cursor-pointer border ${
+                              idx === 0
+                                ? 'bg-purple-600/80 hover:bg-purple-600 border-purple-400/30'
+                                : 'bg-gray-600/60 hover:bg-gray-600/80 border-gray-500/30'
+                            }`}
+                        >
+                          <Play size={10} />
+                          {t('advisor.follow')}: {getActionLabel(parsed, t)}
+                        </button>
+                      )}
+                    </div>
                   );
-                })()}
-              </>
+                })}
+              </div>
             )}
 
             {/* Refresh button */}
-            {!loading && (advice || error) && isMyTurn && (
+            {!loading && (suggestions.length > 0 || error) && isMyTurn && (
               <button
                 onClick={handleGetAdvice}
                 className="mt-2 text-[10px] text-purple-400 hover:text-purple-300 underline cursor-pointer"

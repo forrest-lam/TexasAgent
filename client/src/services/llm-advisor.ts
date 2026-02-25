@@ -99,15 +99,14 @@ function buildPrompt(state: GameState, myPlayerId: string, locale: string, handA
 
   const analysisTask = locale === 'zh'
     ? `## 分析任务
-基于以上所有信息，特别是对手的行为画像、当前手牌行动历史和剥削建议：
+基于以上所有信息，特别是对手的行为画像、当前手牌行动历史和剥削建议，给出**两个**不同的策略建议（主要建议和备选建议），并为每个建议分配概率（两者概率之和为100%）。
 
+分析要点：
 1. **牌力评估**：结合公共牌、听牌和outs评估我的手牌
 2. **底池赔率 vs 胜率**：跟注/加注在数学上是否盈利？
 3. **当前手牌行动解读**：根据本手牌中各阶段的行动序列，推断对手可能持有的牌力范围
 4. **对手剥削**：如何针对每个对手的已知弱点进行剥削？
 5. **位置优势**：我的位置如何影响最优打法？
-6. **建议操作**：**弃牌**、**过牌**、**跟注**、**加注 $X** 或 **全下**
-7. **信心**：你有多确信（低/中/高）？
 
 重要原则：
 - 不要默认保守打法。当数学和读牌支持时要保持激进。
@@ -116,21 +115,34 @@ function buildPrompt(state: GameState, myPlayerId: string, locale: string, handA
 - 有位置优势时，倾向于激进。
 - 考虑筹码/底池比来决定下注大小。
 - 结合当前手牌的行动历史来判断对手本手的真实意图。
+- 两个建议应该是**不同的操作**，代表不同的策略方向。
 
-格式：
-**建议操作**：[操作]
-**信心**：[低/中/高]
-**理由**：[2-3句话解释原因，引用具体的对手倾向和当前手牌行动]`
+你必须严格按照以下JSON格式返回（不要包含其他内容）：
+\`\`\`json
+{
+  "suggestions": [
+    {
+      "action": "弃牌/过牌/跟注/加注 $X/全下",
+      "probability": 70,
+      "reason": "2-3句话解释原因"
+    },
+    {
+      "action": "弃牌/过牌/跟注/加注 $X/全下",
+      "probability": 30,
+      "reason": "2-3句话解释原因"
+    }
+  ]
+}
+\`\`\``
     : `## Your Analysis Task
-Based on ALL the above information, especially the opponent profiles, current hand action history, and exploit tips:
+Based on ALL the above information, especially the opponent profiles, current hand action history, and exploit tips, provide **TWO** different strategy suggestions (primary and alternative), with a probability assigned to each (probabilities must sum to 100%).
 
+Analysis points:
 1. **Hand Strength**: Evaluate my hand considering community cards, draws, and outs
 2. **Pot Odds vs Equity**: Is calling/raising mathematically profitable?
 3. **Current Hand Action Reads**: Based on the action sequence this hand, infer opponents' likely hand strength ranges
 4. **Opponent Exploitation**: How should I specifically exploit each opponent's known weaknesses?
 5. **Position Advantage**: How does my position affect the optimal play?
-6. **Recommended Action**: **FOLD**, **CHECK**, **CALL**, **RAISE $X**, or **ALL-IN**
-7. **Confidence**: How confident are you (low/medium/high)?
 
 IMPORTANT GUIDELINES:
 - Do NOT default to conservative play. Be aggressive when the math and reads support it.
@@ -139,11 +151,25 @@ IMPORTANT GUIDELINES:
 - If you have position advantage, lean toward aggression.
 - Consider stack-to-pot ratio when sizing bets.
 - Use the current hand's action history to read opponents' real intentions this hand.
+- The two suggestions should be **different actions**, representing different strategic directions.
 
-Format:
-**Recommendation**: [ACTION]
-**Confidence**: [low/medium/high]
-**Reason**: [2-3 sentences explaining WHY, referencing specific opponent tendencies and current hand actions]`;
+You MUST respond in the following JSON format ONLY (no other text):
+\`\`\`json
+{
+  "suggestions": [
+    {
+      "action": "FOLD/CHECK/CALL/RAISE $X/ALL-IN",
+      "probability": 70,
+      "reason": "2-3 sentences explaining why"
+    },
+    {
+      "action": "FOLD/CHECK/CALL/RAISE $X/ALL-IN",
+      "probability": 30,
+      "reason": "2-3 sentences explaining why"
+    }
+  ]
+}
+\`\`\``;
 
   // Build current hand action history grouped by phase
   let actionHistorySection = '';
@@ -212,7 +238,14 @@ KEY PRINCIPLES:
 You give CONCISE, ACTIONABLE advice. You MUST respond in English.`;
 }
 
-export async function getAdvice(state: GameState, myPlayerId: string, handActions: HandAction[] = []): Promise<string> {
+/** A single suggestion from the LLM advisor */
+export interface AdvisorSuggestion {
+  action: string;       // Raw action text from LLM (e.g. "RAISE $200", "弃牌")
+  probability: number;  // 0-100
+  reason: string;
+}
+
+export async function getAdvice(state: GameState, myPlayerId: string, handActions: HandAction[] = []): Promise<AdvisorSuggestion[]> {
   // Ensure user LLM key is loaded from server
   await loadUserLLMKey();
 
@@ -238,7 +271,7 @@ export async function getAdvice(state: GameState, myPlayerId: string, handAction
         { role: 'system', content: getSystemPrompt(locale) },
         { role: 'user', content: prompt },
       ],
-      max_tokens: 500,
+      max_tokens: 800,
       temperature: 0.7,
     }),
   });
@@ -249,5 +282,36 @@ export async function getAdvice(state: GameState, myPlayerId: string, handAction
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || 'No response';
+  const content: string = data.choices?.[0]?.message?.content || '';
+
+  return parseAdvisorResponse(content);
+}
+
+/** Parse LLM JSON response into structured suggestions */
+function parseAdvisorResponse(content: string): AdvisorSuggestion[] {
+  // Try to extract JSON from markdown code block or raw text
+  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || content.match(/(\{[\s\S]*\})/);
+  if (!jsonMatch) {
+    // Fallback: return the raw text as a single suggestion
+    return [{ action: content.trim(), probability: 100, reason: '' }];
+  }
+
+  try {
+    const parsed = JSON.parse(jsonMatch[1].trim());
+    const suggestions: AdvisorSuggestion[] = (parsed.suggestions || []).map((s: any) => ({
+      action: String(s.action || '').trim(),
+      probability: Number(s.probability) || 50,
+      reason: String(s.reason || '').trim(),
+    }));
+
+    if (suggestions.length === 0) {
+      return [{ action: content.trim(), probability: 100, reason: '' }];
+    }
+
+    // Sort by probability descending
+    suggestions.sort((a, b) => b.probability - a.probability);
+    return suggestions;
+  } catch {
+    return [{ action: content.trim(), probability: 100, reason: '' }];
+  }
 }

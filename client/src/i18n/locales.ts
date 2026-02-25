@@ -95,6 +95,8 @@ export const locales: Record<Locale, Record<string, string>> = {
     'advisor.follow': 'Follow',
     'advisor.noKey': 'API Key not configured',
     'advisor.error': 'Analysis failed',
+    'advisor.primary': 'Primary',
+    'advisor.alternative': 'Alternative',
 
     // Settings
     'settings.language': 'Language',
@@ -211,6 +213,8 @@ export const locales: Record<Locale, Record<string, string>> = {
     'advisor.follow': '一键遵循',
     'advisor.noKey': 'API Key 未配置',
     'advisor.error': '分析失败',
+    'advisor.primary': '推荐',
+    'advisor.alternative': '备选',
 
     // Settings
     'settings.language': '语言',
