@@ -161,6 +161,60 @@ app.get('/api/user/llm-config/full', authMiddleware, (req, res) => {
   });
 });
 
+// --- LLM proxy route (avoids CORS issues with direct browser→OpenAI calls) ---
+app.post('/api/llm/chat', authMiddleware, async (req, res) => {
+  const user = getUserById((req as any).userId);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  // Resolve API key: user's server-side config → env fallback
+  const userConfig = user.llmConfig;
+  const apiKey = userConfig?.apiKey || process.env.LLM_API_KEY || '';
+  const apiBaseUrl = (userConfig?.apiBaseUrl || process.env.LLM_API_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+  const model = userConfig?.model || process.env.LLM_MODEL || 'gpt-4o-mini';
+
+  if (!apiKey) {
+    res.status(400).json({ error: 'No API key configured. Please set your LLM API key in Settings.' });
+    return;
+  }
+
+  const { messages, max_tokens, temperature } = req.body;
+  if (!messages || !Array.isArray(messages)) {
+    res.status(400).json({ error: 'Invalid request: messages array required' });
+    return;
+  }
+
+  try {
+    const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: max_tokens || 800,
+        temperature: temperature ?? 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => 'Unknown error');
+      res.status(response.status).json({ error: `LLM API error ${response.status}: ${errText}` });
+      return;
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (err: any) {
+    console.error('[LLM Proxy] Error:', err.message);
+    res.status(502).json({ error: `Failed to reach LLM API: ${err.message}` });
+  }
+});
+
 // Update chips (for single player mode settlement)
 app.put('/api/user/chips', authMiddleware, (req, res) => {
   const { chips } = req.body;

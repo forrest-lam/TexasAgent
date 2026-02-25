@@ -14,46 +14,28 @@ import type { HandAction } from '../stores/game-store';
 function getLLMConfig() {
   const user = useAuthStore.getState().user;
   const token = useAuthStore.getState().token;
-  // If user has configured LLM on server, fetch the full key from their profile
-  // For now, use env vars as fallback; user-specific config loaded at runtime
   const envKey = import.meta.env.VITE_LLM_API_KEY as string || '';
-  const envUrl = (import.meta.env.VITE_LLM_API_BASE_URL as string || 'https://api.openai.com/v1').replace(/\/$/, '');
-  const envModel = import.meta.env.VITE_LLM_MODEL as string || 'gpt-4o-mini';
   return {
-    apiKey: (window as any).__userLLMApiKey || envKey,
-    apiBaseUrl: user?.llmConfig?.apiBaseUrl || envUrl,
-    model: user?.llmConfig?.model || envModel,
+    apiKey: envKey,
+    hasServerKey: !!user?.llmConfig?.hasApiKey,
     token,
   };
 }
 
 export function isLLMConfigured(): boolean {
-  const { apiKey } = getLLMConfig();
-  const user = useAuthStore.getState().user;
-  return !!apiKey || !!user?.llmConfig?.hasApiKey;
+  const { apiKey, hasServerKey } = getLLMConfig();
+  return !!apiKey || hasServerKey;
 }
 
-/** Check if an API key is actually available (env var, runtime cache, or server-side config) */
+/** Check if an API key is actually available (env var or server-side config) */
 export function hasLLMApiKey(): boolean {
-  const { apiKey } = getLLMConfig();
-  const user = useAuthStore.getState().user;
-  return !!apiKey || !!user?.llmConfig?.hasApiKey;
+  const { apiKey, hasServerKey } = getLLMConfig();
+  return !!apiKey || hasServerKey;
 }
 
-// Load the user's full API key from server (called once when advisor is used)
+// loadUserLLMKey is no longer needed — API key stays on the server
 export async function loadUserLLMKey(): Promise<void> {
-  const { token } = getLLMConfig();
-  if (!token || (window as any).__userLLMApiKey) return;
-  try {
-    const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : `http://${window.location.hostname}:3001`);
-    const res = await fetch(`${API_BASE}/api/user/llm-config/full`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.apiKey) (window as any).__userLLMApiKey = data.apiKey;
-    }
-  } catch {}
+  // No-op: kept for backward compatibility with callers
 }
 
 function cardToString(card: Card): string {
@@ -253,27 +235,25 @@ export interface AdvisorSuggestion {
 }
 
 export async function getAdvice(state: GameState, myPlayerId: string, handActions: HandAction[] = []): Promise<AdvisorSuggestion[]> {
-  // Ensure user LLM key is loaded from server
-  await loadUserLLMKey();
-
-  const { apiKey, apiBaseUrl, model } = getLLMConfig();
+  const { token } = getLLMConfig();
   const locale = useI18n.getState().locale;
 
-  if (!apiKey) {
-    throw new Error('API Key not configured');
+  if (!token) {
+    throw new Error('Not authenticated');
   }
 
   const prompt = buildPrompt(state, myPlayerId, locale, handActions);
   if (!prompt) throw new Error('Cannot build prompt');
 
-  const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+  const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : `http://${window.location.hostname}:3001`);
+
+  const response = await fetch(`${API_BASE}/api/llm/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify({
-      model,
       messages: [
         { role: 'system', content: getSystemPrompt(locale) },
         { role: 'user', content: prompt },
@@ -284,8 +264,8 @@ export async function getAdvice(state: GameState, myPlayerId: string, handAction
   });
 
   if (!response.ok) {
-    const err = await response.text().catch(() => 'Unknown error');
-    throw new Error(`API error ${response.status}: ${err}`);
+    const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || `API error ${response.status}`);
   }
 
   const data = await response.json();
