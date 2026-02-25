@@ -15,8 +15,12 @@ export class GameController {
   private room: Room;
   private aiPlayers: Map<string, AIPlayer> = new Map();
   private actionTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Timer for the delay between hands (finishHand → startNextHand) */
+  private nextHandTimer: ReturnType<typeof setTimeout> | null = null;
   private emitEvent: GameEventCallback;
   private isProcessing = false;
+  /** Set to true after cleanup() — all async operations should bail out */
+  private destroyed = false;
   /** Queued action from a timeout that arrived while isProcessing was true */
   private pendingTimeoutAction: { playerId: string; action: PlayerAction } | null = null;
   /** Players who timed out this hand — will be kicked before the next hand */
@@ -158,7 +162,13 @@ export class GameController {
   }
 
   cleanup(): void {
+    this.destroyed = true;
     this.clearActionTimer();
+    if (this.nextHandTimer) {
+      clearTimeout(this.nextHandTimer);
+      this.nextHandTimer = null;
+    }
+    this.pendingTimeoutAction = null;
     this.aiPlayers.clear();
   }
 
@@ -279,6 +289,7 @@ export class GameController {
   }
 
   private async processAction(playerId: string, action: PlayerAction): Promise<void> {
+    if (this.destroyed) return;
     if (this.isProcessing) {
       // Queue timeout folds so they are not silently dropped
       console.log(`[processAction] Blocked by isProcessing, queuing ${action.type} for ${playerId}`);
@@ -426,6 +437,7 @@ export class GameController {
   private async runOutBoard(state: GameState): Promise<void> {
     // Deal remaining community cards
     while (state.communityCards.length < 5) {
+      if (this.destroyed) return;
       const count = state.phase === 'preflop' ? 3 :
                     state.communityCards.length < 3 ? 3 - state.communityCards.length : 1;
       this.dealCommunityCards(state, Math.min(count, 5 - state.communityCards.length));
@@ -436,6 +448,7 @@ export class GameController {
 
       this.broadcastState(state);
       await new Promise(resolve => setTimeout(resolve, 800));
+      if (this.destroyed) return;
     }
 
     this.finishHand(state);
@@ -468,12 +481,16 @@ export class GameController {
     this.emitEvent(this.room.id, 'game:ended', null);
 
     // Schedule next hand after delay
-    setTimeout(() => {
+    this.nextHandTimer = setTimeout(() => {
+      this.nextHandTimer = null;
       this.startNextHand();
     }, 5000);
   }
 
   private startNextHand(): void {
+    // Bail out if controller has been destroyed
+    if (this.destroyed) return;
+
     // FIRST: merge pending players so we can cancel any standing/timeout for re-seated players
     if (this.room.pendingPlayers && this.room.pendingPlayers.length > 0) {
       for (const pending of this.room.pendingPlayers) {
@@ -526,6 +543,17 @@ export class GameController {
 
     // Remove players with no chips
     const activePlayers = this.room.players.filter(p => p.chips > 0 || p.isAI);
+
+    // Check if only AI players remain — if so, notify to destroy the room
+    const humanPlayers = this.room.players.filter(p => !p.isAI);
+    if (humanPlayers.length === 0) {
+      console.log(`[startNextHand] No human players left in room ${this.room.id}, triggering onRoomEmpty`);
+      if (this.onRoomEmpty) {
+        this.onRoomEmpty();
+      }
+      return;
+    }
+
     if (activePlayers.filter(p => p.chips > 0).length < 2) {
       this.room.status = 'waiting';
       this.emitEvent(this.room.id, 'room:updated', this.room);
@@ -551,6 +579,7 @@ export class GameController {
   }
 
   private scheduleNextAction(state: GameState): void {
+    if (this.destroyed) return;
     this.clearActionTimer();
 
     const currentPlayer = state.players[state.currentPlayerIndex];
@@ -573,6 +602,7 @@ export class GameController {
   }
 
   private async handleAITurn(state: GameState, aiPlayer: Player): Promise<void> {
+    if (this.destroyed) return;
     const ai = this.aiPlayers.get(aiPlayer.id);
     if (!ai) {
       this.processAction(aiPlayer.id, { type: 'fold' });
@@ -581,6 +611,8 @@ export class GameController {
 
     try {
       const action = await ai.makeDecision(state, aiPlayer.id);
+      // Re-check after async: room may have been destroyed during AI think time
+      if (this.destroyed) return;
 
       // Validate AI action, fallback to fold if invalid
       if (isValidAction(state, aiPlayer.id, action)) {
@@ -598,6 +630,7 @@ export class GameController {
       }
     } catch (err) {
       console.error(`[AI] Error during AI decision for ${aiPlayer.id}:`, err);
+      if (this.destroyed) return;
       // Fallback: fold on error to prevent game from getting stuck
       const callAmount = state.currentBet - aiPlayer.currentBet;
       if (callAmount === 0) {
