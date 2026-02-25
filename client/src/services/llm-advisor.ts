@@ -4,7 +4,7 @@
  * Now includes rich player profiling data and exploit-oriented prompting.
  */
 
-import { GameState, Card } from '@texas-agent/shared';
+import { GameState, Card, evaluateHand } from '@texas-agent/shared';
 import { getProfileSummaryForLLM } from './player-memory';
 import { useAuthStore } from '../stores/auth-store';
 import { useI18n } from '../i18n';
@@ -55,6 +55,138 @@ function getPositionLabel(me: { isDealer?: boolean; isSmallBlind?: boolean; isBi
   return 'Late Position (LP)';
 }
 
+const RANK_VAL: Record<string, number> = {
+  '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
+  '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14,
+};
+
+/** Analyze hand strength and draws, return a human-readable summary */
+function analyzeHandStrength(holeCards: Card[], communityCards: Card[], locale: string): string {
+  const lines: string[] = [];
+
+  if (communityCards.length >= 3) {
+    // Evaluate current made hand
+    const eval_ = evaluateHand(holeCards, communityCards);
+    const bestCardsStr = eval_.bestCards.map(cardToString).join(' ');
+    if (locale === 'zh') {
+      lines.push(`**已成牌**: ${eval_.rankName}（最佳组合: ${bestCardsStr}）`);
+    } else {
+      lines.push(`**Made Hand**: ${eval_.rankName} (best 5: ${bestCardsStr})`);
+    }
+
+    // Check if hole cards contribute to the made hand
+    const bestCardIds = new Set(eval_.bestCards.map(c => `${c.rank}${c.suit}`));
+    const holeInBest = holeCards.filter(c => bestCardIds.has(`${c.rank}${c.suit}`));
+    if (holeInBest.length === 0) {
+      lines.push(locale === 'zh'
+        ? `⚠️ 注意：你的底牌都没有参与最佳组合，这是公共牌面上的牌力，所有人共享！`
+        : `⚠️ WARNING: Neither of your hole cards is in the best 5. This hand is on the board — everyone shares it!`);
+    } else if (holeInBest.length === 1) {
+      lines.push(locale === 'zh'
+        ? `你的底牌 ${cardToString(holeInBest[0])} 参与了最佳组合`
+        : `Your hole card ${cardToString(holeInBest[0])} contributes to the best hand`);
+    } else {
+      lines.push(locale === 'zh'
+        ? `你的两张底牌都参与了最佳组合`
+        : `Both your hole cards contribute to the best hand`);
+    }
+  }
+
+  // Detect draws (only useful before river)
+  if (communityCards.length >= 3 && communityCards.length < 5) {
+    const allCards = [...holeCards, ...communityCards];
+    const draws: string[] = [];
+
+    // Flush draw detection
+    const suitCounts = new Map<string, number>();
+    for (const c of allCards) {
+      suitCounts.set(c.suit, (suitCounts.get(c.suit) || 0) + 1);
+    }
+    for (const [suit, count] of suitCounts) {
+      const suitSymbol = { hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠' }[suit] || suit;
+      if (count === 4) {
+        const holeSuited = holeCards.filter(c => c.suit === suit);
+        if (holeSuited.length > 0) {
+          draws.push(locale === 'zh' ? `同花听牌 (${suitSymbol}, 差1张)` : `Flush draw (${suitSymbol}, need 1)`);
+        }
+      }
+    }
+
+    // Straight draw detection
+    const uniqueRanks = [...new Set(allCards.map(c => RANK_VAL[c.rank]))].sort((a, b) => a - b);
+    // Check for open-ended and gutshot straight draws
+    for (let i = 0; i <= uniqueRanks.length - 4; i++) {
+      const window = uniqueRanks.slice(i, i + 5);
+      if (window.length >= 4) {
+        const span = window[window.length - 1] - window[0];
+        // Check that at least one hole card is involved
+        const windowRanks = new Set(window);
+        const holeInWindow = holeCards.filter(c => windowRanks.has(RANK_VAL[c.rank]));
+        if (holeInWindow.length > 0) {
+          if (span === 4 && window.length === 4) {
+            draws.push(locale === 'zh' ? '两头顺子听牌 (差1张, 8 outs)' : 'Open-ended straight draw (need 1, 8 outs)');
+          } else if (span === 4 && window.length === 5) {
+            // Already a straight — handled by evaluateHand
+          } else if (span === 3 && window.length === 4) {
+            draws.push(locale === 'zh' ? '两头顺子听牌 (差1张)' : 'Open-ended straight draw (need 1)');
+          }
+        }
+      }
+    }
+    // Gutshot detection: 4 cards within a span of 5 with one gap
+    for (let high = 5; high <= 14; high++) {
+      const rangeSet = new Set<number>();
+      for (let r = high - 4; r <= high; r++) rangeSet.add(r === 1 ? 14 : r);
+      const matching = uniqueRanks.filter(r => rangeSet.has(r));
+      if (matching.length === 4) {
+        const holeInRange = holeCards.filter(c => rangeSet.has(RANK_VAL[c.rank]));
+        if (holeInRange.length > 0 && !draws.some(d => d.includes('straight') || d.includes('顺子'))) {
+          draws.push(locale === 'zh' ? '卡顺听牌 (差1张, 4 outs)' : 'Gutshot straight draw (need 1, 4 outs)');
+        }
+      }
+    }
+
+    if (draws.length > 0) {
+      lines.push((locale === 'zh' ? '**听牌**: ' : '**Draws**: ') + draws.join(', '));
+    }
+  }
+
+  // Preflop: describe starting hand category
+  if (communityCards.length === 0 && holeCards.length === 2) {
+    const r1 = RANK_VAL[holeCards[0].rank];
+    const r2 = RANK_VAL[holeCards[1].rank];
+    const suited = holeCards[0].suit === holeCards[1].suit;
+    const isPair = r1 === r2;
+    const high = Math.max(r1, r2);
+    const low = Math.min(r1, r2);
+
+    let category = '';
+    if (isPair) {
+      if (high >= 12) category = locale === 'zh' ? '超强起手牌（大对子）' : 'Premium (high pair)';
+      else if (high >= 9) category = locale === 'zh' ? '强起手牌（中高对子）' : 'Strong (mid-high pair)';
+      else category = locale === 'zh' ? '小对子（适合看翻牌博三条）' : 'Small pair (set mining)';
+    } else if (high === 14 && low >= 11) {
+      category = locale === 'zh' ? '强起手牌（A+高牌）' : 'Strong (Ace + high card)';
+    } else if (high === 14 && low >= 9) {
+      category = locale === 'zh' ? '中上起手牌（A+中牌）' : 'Good (Ace + mid card)';
+    } else if (high >= 12 && low >= 11) {
+      category = locale === 'zh' ? '强起手牌（两张高牌）' : 'Strong (two high cards)';
+    } else if (high >= 10 && low >= 9 && suited) {
+      category = locale === 'zh' ? '可玩牌（同花连张）' : 'Playable (suited connectors)';
+    } else if (high - low === 1 && suited && low >= 6) {
+      category = locale === 'zh' ? '可玩牌（同花连张）' : 'Playable (suited connectors)';
+    } else {
+      category = locale === 'zh' ? '普通起手牌' : 'Marginal hand';
+    }
+    const suitedStr = suited ? (locale === 'zh' ? '同花' : 'suited') : (locale === 'zh' ? '不同花' : 'offsuit');
+    lines.push(locale === 'zh'
+      ? `**起手牌分类**: ${category}（${suitedStr}）`
+      : `**Starting Hand**: ${category} (${suitedStr})`);
+  }
+
+  return lines.join('\n');
+}
+
 function buildPrompt(state: GameState, myPlayerId: string, locale: string, handActions: HandAction[]): string {
   const me = state.players.find(p => p.id === myPlayerId);
   if (!me) return '';
@@ -85,12 +217,15 @@ function buildPrompt(state: GameState, myPlayerId: string, locale: string, handA
   // Rich player behavioral data
   const playerMemory = getProfileSummaryForLLM(myPlayerId, me.name);
 
+  // Pre-computed hand strength analysis (so LLM doesn't have to figure out card combos)
+  const handStrength = analyzeHandStrength(me.cards, state.communityCards, locale);
+
   const analysisTask = locale === 'zh'
     ? `## 分析任务
-基于以上所有信息，特别是对手的行为画像、当前手牌行动历史和剥削建议，给出**两个**不同的策略建议（主要建议和备选建议），并为每个建议分配概率（两者概率之和为100%）。
+基于以上所有信息，特别是**预计算的手牌强度分析（Hand Strength Analysis）**、对手的行为画像、当前手牌行动历史和剥削建议，给出**两个**不同的策略建议（主要建议和备选建议），并为每个建议分配概率（两者概率之和为100%）。
 
 分析要点：
-1. **牌力评估**：结合公共牌、听牌和outs评估我的手牌
+1. **牌力评估**：⚠️ 必须信任上方"Hand Strength Analysis"中预计算的牌力结果！不要自己推算牌型组合！如果预计算显示你有顺子/同花/葫芦等强牌，就按该牌力来制定策略。
 2. **底池赔率 vs 胜率**：跟注/加注在数学上是否盈利？
 3. **当前手牌行动解读**：根据本手牌中各阶段的行动序列，推断对手可能持有的牌力范围
 4. **对手剥削**：如何针对每个对手的已知弱点进行剥削？
@@ -123,10 +258,10 @@ function buildPrompt(state: GameState, myPlayerId: string, locale: string, handA
 }
 \`\`\``
     : `## Your Analysis Task
-Based on ALL the above information, especially the opponent profiles, current hand action history, and exploit tips, provide **TWO** different strategy suggestions (primary and alternative), with a probability assigned to each (probabilities must sum to 100%).
+Based on ALL the above information, especially the **pre-computed Hand Strength Analysis**, opponent profiles, current hand action history, and exploit tips, provide **TWO** different strategy suggestions (primary and alternative), with a probability assigned to each (probabilities must sum to 100%).
 
 Analysis points:
-1. **Hand Strength**: Evaluate my hand considering community cards, draws, and outs
+1. **Hand Strength**: ⚠️ You MUST trust the pre-computed "Hand Strength Analysis" section above! Do NOT try to evaluate card combinations yourself! If it says you have a Straight/Flush/Full House etc., base your strategy on that.
 2. **Pot Odds vs Equity**: Is calling/raising mathematically profitable?
 3. **Current Hand Action Reads**: Based on the action sequence this hand, infer opponents' likely hand strength ranges
 4. **Opponent Exploitation**: How should I specifically exploit each opponent's known weaknesses?
@@ -191,6 +326,9 @@ You MUST respond in the following JSON format ONLY (no other text):
 - **Min Raise To**: $${state.minRaise}
 - **Big Blind**: $${state.bigBlind}
 - **Players in Hand**: ${playersInHand}
+
+## Hand Strength Analysis (pre-computed, TRUST this)
+${handStrength}
 
 ## Opponents Still in Hand
   ${opponents}
