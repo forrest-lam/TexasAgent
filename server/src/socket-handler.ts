@@ -132,6 +132,12 @@ export function setupSocketHandlers(io: IOServer): void {
               playerRooms.delete(playerId);
               broadcastRoomList(io);
             });
+            controller.setOnPlayerStand((playerId) => {
+              const playerSocket = io.sockets.sockets.get(playerId);
+              if (playerSocket) {
+                playerSocket.emit('room:stood-up');
+              }
+            });
             controller.setOnRoomEmpty(() => {
               const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
               if (socketsInRoom && socketsInRoom.size > 0) {
@@ -225,6 +231,13 @@ export function setupSocketHandlers(io: IOServer): void {
         }
         playerRooms.delete(playerId);
         broadcastRoomList(io);
+      });
+      // Register stand callback for auto-stood-up players (e.g. timeout)
+      controller.setOnPlayerStand((playerId) => {
+        const playerSocket = io.sockets.sockets.get(playerId);
+        if (playerSocket) {
+          playerSocket.emit('room:stood-up');
+        }
       });
       // Register callback for when only AI players remain in the players list
       controller.setOnRoomEmpty(() => {

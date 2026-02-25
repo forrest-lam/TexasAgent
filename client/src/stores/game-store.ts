@@ -8,18 +8,30 @@ export interface LogEntry {
   params?: Record<string, string | number>;
 }
 
+/** A single action in the current hand's action history */
+export interface HandAction {
+  playerName: string;
+  action: string;       // fold | check | call | raise | all-in
+  amount?: number;
+  phase: string;        // preflop | flop | turn | river
+}
+
 interface GameStore {
   gameState: GameState | null;
   isMyTurn: boolean;
   timeLimit: number;
   myPlayerId: string;
   gameLog: LogEntry[];
+  /** Structured action history for the current hand (reset each new hand) */
+  handActions: HandAction[];
   setGameState: (state: GameState) => void;
   setMyPlayerId: (id: string) => void;
   sendAction: (action: PlayerAction) => void;
   addLog: (entry: LogEntry) => void;
+  addHandAction: (action: HandAction) => void;
   clearGame: () => void;
-  initGameListeners: () => void;
+  /** Register socket listeners; returns a cleanup function to remove them */
+  initGameListeners: () => (() => void);
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -28,11 +40,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   timeLimit: 60000,
   myPlayerId: '',
   gameLog: [],
+  handActions: [],
 
   setGameState: (state: GameState) => {
     const myId = get().myPlayerId;
-    const isMyTurn = state.phase !== 'showdown' && state.players[state.currentPlayerIndex]?.id === myId;
-    set({ gameState: state, isMyTurn });
+    const shouldBeMyTurn = state.phase !== 'showdown' && state.players[state.currentPlayerIndex]?.id === myId;
+    // In multiplayer mode, only allow setGameState to CLEAR isMyTurn (set to false).
+    // Setting isMyTurn=true is exclusively done by the 'game:your-turn' event
+    // to avoid race conditions between game:state and game:your-turn arrivals.
+    if (shouldBeMyTurn) {
+      // Don't set isMyTurn=true here; let game:your-turn handle it
+      set({ gameState: state });
+    } else {
+      set({ gameState: state, isMyTurn: false });
+    }
   },
 
   setMyPlayerId: (id: string) => set({ myPlayerId: id }),
@@ -47,25 +68,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set(s => ({ gameLog: [...s.gameLog.slice(-49), entry] }));
   },
 
+  addHandAction: (action: HandAction) => {
+    set(s => ({ handActions: [...s.handActions, action] }));
+  },
+
   clearGame: () => set({
     gameState: null,
     isMyTurn: false,
     gameLog: [],
+    handActions: [],
   }),
 
   initGameListeners: () => {
     const socket = getSocket();
 
-    socket.on('game:started', (state) => {
+    const onStarted = (state: GameState) => {
+      set({ handActions: [], isMyTurn: false }); // Reset action history and turn for new hand
       get().setGameState(state);
       get().addLog({ key: 'log.newHand' });
-    });
+    };
 
-    socket.on('game:state', (state) => {
+    const onState = (state: GameState) => {
       get().setGameState(state);
-    });
+    };
 
-    socket.on('game:action', ({ playerId, action }) => {
+    const onAction = ({ playerId, action }: { playerId: string; action: PlayerAction }) => {
       const state = get().gameState;
       const player = state?.players.find(p => p.id === playerId);
       const name = player?.name || 'Unknown';
@@ -73,9 +100,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
         key: 'log.action',
         params: { name, action: action.type, ...(action.amount ? { amount: action.amount } : {}) },
       });
-    });
+      // Record structured action for LLM advisor context
+      get().addHandAction({
+        playerName: name,
+        action: action.type,
+        amount: action.amount,
+        phase: state?.phase || 'unknown',
+      });
+    };
 
-    socket.on('game:ended', (state) => {
+    const onEnded = (state: GameState) => {
       get().setGameState(state);
       if (state.winners) {
         for (const w of state.winners) {
@@ -86,10 +120,25 @@ export const useGameStore = create<GameStore>((set, get) => ({
           });
         }
       }
-    });
+    };
 
-    socket.on('game:your-turn', ({ timeLimit }) => {
+    const onYourTurn = ({ timeLimit }: { timeLimit: number }) => {
       set({ isMyTurn: true, timeLimit });
-    });
+    };
+
+    socket.on('game:started', onStarted);
+    socket.on('game:state', onState);
+    socket.on('game:action', onAction);
+    socket.on('game:ended', onEnded);
+    socket.on('game:your-turn', onYourTurn);
+
+    // Return cleanup function to remove listeners
+    return () => {
+      socket.off('game:started', onStarted);
+      socket.off('game:state', onState);
+      socket.off('game:action', onAction);
+      socket.off('game:ended', onEnded);
+      socket.off('game:your-turn', onYourTurn);
+    };
   },
 }));

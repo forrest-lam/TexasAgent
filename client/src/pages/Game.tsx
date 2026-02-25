@@ -23,7 +23,7 @@ export default function Game() {
   const navigate = useNavigate();
   const isLocal = roomId === 'local';
   const localEngine = useRef<LocalGameEngine | null>(null);
-  const { gameState, isMyTurn, myPlayerId, gameLog, setGameState, setMyPlayerId, sendAction, addLog, clearGame, initGameListeners } = useGameStore();
+  const { gameState, isMyTurn, myPlayerId, gameLog, setGameState, setMyPlayerId, sendAction, addLog, addHandAction, clearGame, initGameListeners } = useGameStore();
   const [started, setStarted] = useState(false);
   const { t } = useI18n();
   const prevPhaseRef = useRef<string | null>(null);
@@ -54,6 +54,11 @@ export default function Game() {
     // Track current round for memory
     setCurrentRound(gameState.round);
 
+    // Reset hand actions on new round (for local mode; multiplayer resets via game:started)
+    if (isLocal && prevRoundRef.current !== null && prevRoundRef.current !== gameState.round && phase !== 'showdown') {
+      useGameStore.setState({ handActions: [] });
+    }
+
     // Record actions to player memory (with phase info) — record ALL players for LLM profiling
     if (gameState.lastAction) {
       const actionKey = `${gameState.lastAction.playerId}-${gameState.lastAction.action.type}-${gameState.lastAction.action.amount || 0}`;
@@ -69,6 +74,15 @@ export default function Game() {
             gameState.pot,
             gameState.phase,
           );
+          // Record structured action for LLM advisor (local mode; multiplayer does this in game-store)
+          if (isLocal) {
+            addHandAction({
+              playerName: player.name,
+              action: gameState.lastAction.action.type,
+              amount: gameState.lastAction.action.amount,
+              phase: gameState.phase,
+            });
+          }
         }
       }
     }
@@ -110,13 +124,15 @@ export default function Game() {
   }, [gameState?.phase, gameState?.currentPlayerIndex, gameState?.lastAction, gameState?.winners]);
 
   useEffect(() => {
+    let cleanupGameListeners: (() => void) | undefined;
+
     if (isLocal) {
       setMyPlayerId('human');
       startLocalGame();
     } else {
       const socket = getSocket();
       setMyPlayerId(socket.id || '');
-      initGameListeners();
+      cleanupGameListeners = initGameListeners();
       // Request current game state in case we're rejoining mid-game
       socket.emit('game:resync');
       socket.on('connect', () => {
@@ -132,8 +148,10 @@ export default function Game() {
 
     return () => {
       localEngine.current?.cleanup();
+      cleanupGameListeners?.();
       const socket = getSocket();
       socket.off('room:left');
+      socket.off('connect');
       clearGame();
     };
   }, [roomId]);
@@ -279,6 +297,7 @@ export default function Game() {
             gameState={gameState}
             myPlayerId={myPlayerId}
             isMyTurn={isMyTurn || (isLocal && gameState.players[gameState.currentPlayerIndex]?.id === 'human' && gameState.phase !== 'showdown')}
+            onAction={handleAction}
           />
 
           {/* Action panel */}

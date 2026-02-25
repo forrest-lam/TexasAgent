@@ -119,21 +119,23 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
   const [screenShake, setScreenShake] = useState(false);
   const prevActionRef = useRef<string | null>(null);
 
+  // Compute a stable string key for lastAction to avoid re-triggering on object reference changes
+  const la = gameState.lastAction;
+  const lastActionKey = la ? `${la.playerId}-${la.action.type}-${la.action.amount || 0}-${gameState.round}` : null;
+
   useEffect(() => {
-    const la = gameState.lastAction;
-    if (!la) return;
-    const actionKey = `${la.playerId}-${la.action.type}-${la.action.amount || 0}-${gameState.round}`;
-    if (actionKey === prevActionRef.current) return;
-    prevActionRef.current = actionKey;
+    if (!la || !lastActionKey) return;
+    if (lastActionKey === prevActionRef.current) return;
+    prevActionRef.current = lastActionKey;
 
     if (la.action.type === 'raise' || la.action.type === 'all-in') {
       const orderIdx = ordered.findIndex(p => p.id === la.playerId);
       const pos = positions[orderIdx] || { x: '50%', y: '50%' };
-      setRaiseEffect({ key: actionKey, position: pos, isAllIn: la.action.type === 'all-in' });
+      setRaiseEffect({ key: lastActionKey, position: pos, isAllIn: la.action.type === 'all-in' });
       setScreenShake(true);
       setTimeout(() => setScreenShake(false), 400);
     }
-  }, [gameState.lastAction]);
+  }, [lastActionKey]);
 
   const phaseKey = `phase.${gameState.phase}`;
   const phaseLabel = t(phaseKey);

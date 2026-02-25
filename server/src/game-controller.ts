@@ -25,6 +25,8 @@ export class GameController {
   private standingPlayers: Set<string> = new Set();
   /** Callback to notify socket-handler to kick a player from the room */
   private onPlayerKick?: (playerId: string) => void;
+  /** Callback to notify socket-handler that a player should transition to spectator (stood up) */
+  private onPlayerStand?: (playerId: string) => void;
   /** Callback to notify socket-handler the room should be destroyed (only AI left and no spectators) */
   private onRoomEmpty?: () => void;
 
@@ -41,6 +43,11 @@ export class GameController {
   /** Register a callback that will be called when only AI players remain in the room */
   setOnRoomEmpty(cb: () => void): void {
     this.onRoomEmpty = cb;
+  }
+
+  /** Register a callback to notify a player they have been auto-stood-up (e.g. after timeout) */
+  setOnPlayerStand(cb: (playerId: string) => void): void {
+    this.onPlayerStand = cb;
   }
 
   startGame(): GameState {
@@ -459,34 +466,34 @@ export class GameController {
   }
 
   private startNextHand(): void {
-    // Kick timed-out players before starting the next hand
-    if (this.timedOutPlayers.size > 0) {
-      for (const playerId of this.timedOutPlayers) {
-        // Remove from room players list
-        const idx = this.room.players.findIndex(p => p.id === playerId);
-        if (idx !== -1) {
-          this.room.players.splice(idx, 1);
-        }
-        // Notify socket-handler to clean up the socket
-        if (this.onPlayerKick) {
-          this.onPlayerKick(playerId);
-        }
-      }
-      this.timedOutPlayers.clear();
-      // Broadcast updated room after kicking
-      this.emitEvent(this.room.id, 'room:updated', this.room);
-    }
-
-    // Add pending players (spectators who clicked "sit down") to the active players list
+    // FIRST: merge pending players so we can cancel any standing/timeout for re-seated players
     if (this.room.pendingPlayers && this.room.pendingPlayers.length > 0) {
       for (const pending of this.room.pendingPlayers) {
+        // If a player re-sat after standing/timing out, cancel the stand/kick
+        this.standingPlayers.delete(pending.id);
+        this.timedOutPlayers.delete(pending.id);
         this.room.players.push(pending);
       }
       this.room.pendingPlayers = [];
       this.emitEvent(this.room.id, 'room:updated', this.room);
     }
 
-    // Remove standing players (those who chose to stand up between hands)
+    // Kick timed-out players (only those who did NOT re-sit)
+    if (this.timedOutPlayers.size > 0) {
+      for (const playerId of this.timedOutPlayers) {
+        const idx = this.room.players.findIndex(p => p.id === playerId);
+        if (idx !== -1) {
+          this.room.players.splice(idx, 1);
+        }
+        if (this.onPlayerKick) {
+          this.onPlayerKick(playerId);
+        }
+      }
+      this.timedOutPlayers.clear();
+      this.emitEvent(this.room.id, 'room:updated', this.room);
+    }
+
+    // Remove standing players (those who chose to stand up and did NOT re-sit)
     if (this.standingPlayers.size > 0) {
       for (const playerId of this.standingPlayers) {
         const idx = this.room.players.findIndex(p => p.id === playerId);
@@ -597,9 +604,16 @@ export class GameController {
 
     console.log(`[Timeout] Player ${playerId} timed out, isProcessing=${this.isProcessing}`);
 
-    // Auto-fold on timeout (but don't kick the player — let them continue next hand)
+    // Auto-fold on timeout AND auto-stand (player becomes spectator next hand)
     const callAmount = state.currentBet - currentPlayer.currentBet;
     const action: PlayerAction = callAmount === 0 ? { type: 'check' } : { type: 'fold' };
+
+    // Mark as standing so the player will be removed before the next hand
+    this.standingPlayers.add(playerId);
+    // Notify client so they transition to spectator UI
+    if (this.onPlayerStand) {
+      this.onPlayerStand(playerId);
+    }
 
     if (this.isProcessing) {
       // Force-queue the timeout action — it MUST be processed

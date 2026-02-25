@@ -1,22 +1,91 @@
 import { useState } from 'react';
-import { GameState } from '@texas-agent/shared';
+import { GameState, PlayerAction } from '@texas-agent/shared';
 import { isLLMConfigured, getAdvice } from '../../services/llm-advisor';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, X, Loader2 } from 'lucide-react';
+import { Brain, X, Loader2, Play } from 'lucide-react';
 import { useI18n } from '../../i18n';
+import { useGameStore } from '../../stores/game-store';
 
 interface LLMAdvisorProps {
   gameState: GameState;
   myPlayerId: string;
   isMyTurn: boolean;
+  onAction?: (action: PlayerAction) => void;
 }
 
-export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn }: LLMAdvisorProps) {
+/**
+ * Parse the LLM advice text to extract a recommended PlayerAction.
+ * Handles both English and Chinese formats from the prompt template.
+ */
+function parseRecommendedAction(advice: string, gameState: GameState, myPlayerId: string): PlayerAction | null {
+  const text = advice.toUpperCase();
+
+  // Try to find the recommendation line (EN: **Recommendation**: ... / ZH: **建议操作**：...)
+  const recMatch = advice.match(/\*\*(?:Recommendation|建议操作)\*\*[：:]\s*(.+)/i);
+  const recLine = recMatch ? recMatch[1].toUpperCase() : text;
+
+  const player = gameState.players.find(p => p.id === myPlayerId);
+  if (!player) return null;
+
+  // ALL-IN check first (before other patterns)
+  if (/ALL[\s-]?IN|全[下押]/.test(recLine)) {
+    return { type: 'all-in' };
+  }
+
+  // RAISE $X — extract amount
+  const raiseMatch = recLine.match(/(?:RAISE|加注)[^$\d]*\$?\s*(\d[\d,]*)/);
+  if (raiseMatch) {
+    const amount = parseInt(raiseMatch[1].replace(/,/g, ''), 10);
+    if (!isNaN(amount) && amount > 0) {
+      // If the raise amount would be all-in
+      if (amount >= player.chips + player.currentBet) {
+        return { type: 'all-in' };
+      }
+      return { type: 'raise', amount };
+    }
+  }
+
+  // Simple RAISE without amount — use min raise
+  if (/RAISE|加注/.test(recLine)) {
+    return { type: 'raise', amount: gameState.minRaise };
+  }
+
+  // CALL
+  if (/\bCALL\b|跟注/.test(recLine)) {
+    return { type: 'call' };
+  }
+
+  // CHECK
+  if (/\bCHECK\b|过牌/.test(recLine)) {
+    return { type: 'check' };
+  }
+
+  // FOLD
+  if (/\bFOLD\b|弃牌/.test(recLine)) {
+    return { type: 'fold' };
+  }
+
+  return null;
+}
+
+/** Get a short label for the parsed action */
+function getActionLabel(action: PlayerAction, t: (key: string) => string): string {
+  switch (action.type) {
+    case 'fold': return t('action.fold');
+    case 'check': return t('action.check');
+    case 'call': return t('action.call');
+    case 'raise': return `${t('action.raise')} $${action.amount ?? ''}`;
+    case 'all-in': return t('action.allIn');
+  }
+}
+
+export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }: LLMAdvisorProps) {
   const [advice, setAdvice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const { t } = useI18n();
+  const handActions = useGameStore(s => s.handActions);
 
   const configured = isLLMConfigured();
 
@@ -27,7 +96,7 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn }: LLMAdvis
     setAdvice(null);
     setExpanded(true);
     try {
-      const result = await getAdvice(gameState, myPlayerId);
+      const result = await getAdvice(gameState, myPlayerId, handActions);
       setAdvice(result);
     } catch (e: any) {
       setError(e.message || t('advisor.error'));
@@ -95,9 +164,31 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn }: LLMAdvis
             )}
 
             {advice && (
-              <div className="text-xs text-gray-200 leading-relaxed whitespace-pre-wrap">
-                {advice}
-              </div>
+              <>
+                <div className="text-xs text-gray-200 leading-relaxed whitespace-pre-wrap">
+                  {advice}
+                </div>
+
+                {/* Follow advice button */}
+                {isMyTurn && onAction && (() => {
+                  const parsed = parseRecommendedAction(advice, gameState, myPlayerId);
+                  if (!parsed) return null;
+                  return (
+                    <button
+                      onClick={() => {
+                        onAction(parsed);
+                        setExpanded(false);
+                      }}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg
+                        bg-purple-600/80 hover:bg-purple-600 text-white text-xs font-semibold
+                        transition-colors cursor-pointer border border-purple-400/30"
+                    >
+                      <Play size={12} />
+                      {t('advisor.follow')}: {getActionLabel(parsed, t)}
+                    </button>
+                  );
+                })()}
+              </>
             )}
 
             {/* Refresh button */}

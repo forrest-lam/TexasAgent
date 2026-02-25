@@ -92,6 +92,7 @@ export const locales: Record<Locale, Record<string, string>> = {
     'advisor.title': 'AI Advisor',
     'advisor.thinking': 'Analyzing...',
     'advisor.suggest': 'Get Advice',
+    'advisor.follow': 'Follow',
     'advisor.noKey': 'API Key not configured',
     'advisor.error': 'Analysis failed',
 
@@ -207,6 +208,7 @@ export const locales: Record<Locale, Record<string, string>> = {
     'advisor.title': 'AI 顾问',
     'advisor.thinking': '分析中...',
     'advisor.suggest': '获取建议',
+    'advisor.follow': '一键遵循',
     'advisor.noKey': 'API Key 未配置',
     'advisor.error': '分析失败',
 

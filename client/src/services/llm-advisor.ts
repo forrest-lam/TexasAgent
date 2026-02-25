@@ -8,6 +8,7 @@ import { GameState, Card } from '@texas-agent/shared';
 import { getProfileSummaryForLLM } from './player-memory';
 import { useAuthStore } from '../stores/auth-store';
 import { useI18n } from '../i18n';
+import type { HandAction } from '../stores/game-store';
 
 // Fallback to env vars if user hasn't configured their own
 function getLLMConfig() {
@@ -65,7 +66,7 @@ function getPositionLabel(myIndex: number, dealerIndex: number, totalActive: num
   return 'Late Position (LP)';
 }
 
-function buildPrompt(state: GameState, myPlayerId: string, locale: string): string {
+function buildPrompt(state: GameState, myPlayerId: string, locale: string, handActions: HandAction[]): string {
   const me = state.players.find(p => p.id === myPlayerId);
   if (!me) return '';
 
@@ -98,14 +99,15 @@ function buildPrompt(state: GameState, myPlayerId: string, locale: string): stri
 
   const analysisTask = locale === 'zh'
     ? `## 分析任务
-基于以上所有信息，特别是对手的行为画像和剥削建议：
+基于以上所有信息，特别是对手的行为画像、当前手牌行动历史和剥削建议：
 
 1. **牌力评估**：结合公共牌、听牌和outs评估我的手牌
 2. **底池赔率 vs 胜率**：跟注/加注在数学上是否盈利？
-3. **对手剥削**：如何针对每个对手的已知弱点进行剥削？
-4. **位置优势**：我的位置如何影响最优打法？
-5. **建议操作**：**弃牌**、**过牌**、**跟注**、**加注 $X** 或 **全下**
-6. **信心**：你有多确信（低/中/高）？
+3. **当前手牌行动解读**：根据本手牌中各阶段的行动序列，推断对手可能持有的牌力范围
+4. **对手剥削**：如何针对每个对手的已知弱点进行剥削？
+5. **位置优势**：我的位置如何影响最优打法？
+6. **建议操作**：**弃牌**、**过牌**、**跟注**、**加注 $X** 或 **全下**
+7. **信心**：你有多确信（低/中/高）？
 
 重要原则：
 - 不要默认保守打法。当数学和读牌支持时要保持激进。
@@ -113,20 +115,22 @@ function buildPrompt(state: GameState, myPlayerId: string, locale: string): stri
 - 如果对手被动，推荐薄价值下注。
 - 有位置优势时，倾向于激进。
 - 考虑筹码/底池比来决定下注大小。
+- 结合当前手牌的行动历史来判断对手本手的真实意图。
 
 格式：
 **建议操作**：[操作]
 **信心**：[低/中/高]
-**理由**：[2-3句话解释原因，引用具体的对手倾向]`
+**理由**：[2-3句话解释原因，引用具体的对手倾向和当前手牌行动]`
     : `## Your Analysis Task
-Based on ALL the above information, especially the opponent profiles and exploit tips:
+Based on ALL the above information, especially the opponent profiles, current hand action history, and exploit tips:
 
 1. **Hand Strength**: Evaluate my hand considering community cards, draws, and outs
 2. **Pot Odds vs Equity**: Is calling/raising mathematically profitable?
-3. **Opponent Exploitation**: How should I specifically exploit each opponent's known weaknesses?
-4. **Position Advantage**: How does my position affect the optimal play?
-5. **Recommended Action**: **FOLD**, **CHECK**, **CALL**, **RAISE $X**, or **ALL-IN**
-6. **Confidence**: How confident are you (low/medium/high)?
+3. **Current Hand Action Reads**: Based on the action sequence this hand, infer opponents' likely hand strength ranges
+4. **Opponent Exploitation**: How should I specifically exploit each opponent's known weaknesses?
+5. **Position Advantage**: How does my position affect the optimal play?
+6. **Recommended Action**: **FOLD**, **CHECK**, **CALL**, **RAISE $X**, or **ALL-IN**
+7. **Confidence**: How confident are you (low/medium/high)?
 
 IMPORTANT GUIDELINES:
 - Do NOT default to conservative play. Be aggressive when the math and reads support it.
@@ -134,11 +138,31 @@ IMPORTANT GUIDELINES:
 - If opponents are passive, recommend thin value bets.
 - If you have position advantage, lean toward aggression.
 - Consider stack-to-pot ratio when sizing bets.
+- Use the current hand's action history to read opponents' real intentions this hand.
 
 Format:
 **Recommendation**: [ACTION]
 **Confidence**: [low/medium/high]
-**Reason**: [2-3 sentences explaining WHY, referencing specific opponent tendencies]`;
+**Reason**: [2-3 sentences explaining WHY, referencing specific opponent tendencies and current hand actions]`;
+
+  // Build current hand action history grouped by phase
+  let actionHistorySection = '';
+  if (handActions.length > 0) {
+    const phases = ['preflop', 'flop', 'turn', 'river'];
+    const lines: string[] = [];
+    for (const phase of phases) {
+      const phaseActions = handActions.filter(a => a.phase === phase);
+      if (phaseActions.length === 0) continue;
+      const actionStr = phaseActions.map(a => {
+        const amt = a.amount ? ` $${a.amount}` : '';
+        return `${a.playerName} → ${a.action}${amt}`;
+      }).join(', ');
+      lines.push(`  **${phase}**: ${actionStr}`);
+    }
+    if (lines.length > 0) {
+      actionHistorySection = `\n## Current Hand Action History\n${lines.join('\n')}\n`;
+    }
+  }
 
   return `## Current Hand State
 - **Phase**: ${state.phase}
@@ -156,7 +180,7 @@ Format:
 
 ## Opponents Still in Hand
   ${opponents}
-
+${actionHistorySection}
 ## Player Behavioral Profiles (from tracked history)
 ${playerMemory}
 
@@ -188,7 +212,7 @@ KEY PRINCIPLES:
 You give CONCISE, ACTIONABLE advice. You MUST respond in English.`;
 }
 
-export async function getAdvice(state: GameState, myPlayerId: string): Promise<string> {
+export async function getAdvice(state: GameState, myPlayerId: string, handActions: HandAction[] = []): Promise<string> {
   // Ensure user LLM key is loaded from server
   await loadUserLLMKey();
 
@@ -199,7 +223,7 @@ export async function getAdvice(state: GameState, myPlayerId: string): Promise<s
     throw new Error('API Key not configured');
   }
 
-  const prompt = buildPrompt(state, myPlayerId, locale);
+  const prompt = buildPrompt(state, myPlayerId, locale, handActions);
   if (!prompt) throw new Error('Cannot build prompt');
 
   const response = await fetch(`${apiBaseUrl}/chat/completions`, {
