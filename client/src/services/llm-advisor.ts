@@ -202,6 +202,38 @@ ${analysisTask}`;
 }
 
 function getSystemPrompt(locale: string): string {
+  const preflopGuide = locale === 'zh'
+    ? `
+## Preflop 手牌强度分级（必须遵守）
+翻前阶段你必须严格参考以下手牌分级来评估手牌强度，不能仅凭"是否有对子"来判断：
+- **超强牌（永远加注/再加注）**：AA, KK, QQ, AKs, AKo
+- **强牌（通常加注/3-bet）**：JJ, TT, AQs, AQo, AJs, KQs
+- **中上牌（适合开局加注或跟注加注）**：99, 88, AJo, ATs, KJs, KQo, QJs, JTs
+- **可玩牌（位置好时加注/跟注，位置差时谨慎）**：77, 66, A9s-A2s, KTs, QTs, T9s, 98s, 87s
+- **小对子（22-55）**：适合在位置好时跟注看翻牌（set mining），但翻前价值远低于高牌组合如AJ/KQ
+- **弱牌**：不在上述列表中的组合，通常弃牌
+
+关键要点：
+- AJo/AJs 是中上强度的好牌，翻前不应轻易弃牌！
+- 小对子（22-55）翻前并不比 AJ/KQ 强，它们的价值在于翻牌后中三条
+- 同花连张（如 87s, 98s）的隐含赔率高，位置好时可以玩
+- "s"表示同花（suited），同花比不同花（offsuit/o）大约强 3-4%`
+    : `
+## Preflop Hand Strength Tiers (MUST follow)
+During preflop, you MUST evaluate hand strength based on these tiers, NOT just "whether it's a pair":
+- **Premium (always raise/3-bet)**: AA, KK, QQ, AKs, AKo
+- **Strong (usually raise/3-bet)**: JJ, TT, AQs, AQo, AJs, KQs
+- **Good (open-raise or call raises)**: 99, 88, AJo, ATs, KJs, KQo, QJs, JTs
+- **Playable (raise/call in position, fold early position)**: 77, 66, A9s-A2s, KTs, QTs, T9s, 98s, 87s
+- **Small pairs (22-55)**: Good for set mining when in position, but preflop value is LOWER than high-card hands like AJ/KQ
+- **Weak**: Hands not listed above, usually fold
+
+KEY POINTS:
+- AJo/AJs is a good hand — do NOT fold it preflop easily!
+- Small pairs (22-55) are NOT stronger than AJ/KQ preflop; their value comes from hitting sets postflop
+- Suited connectors (87s, 98s) have high implied odds, playable in position
+- "s" means suited, which is ~3-4% stronger than offsuit ("o")`;
+
   if (locale === 'zh') {
     return `你是一位顶尖的德州扑克策略专家——不是保守的顾问，而是一个激进的、善于剥削对手弱点的玩家，追求最大化期望收益(EV)。
 
@@ -211,6 +243,7 @@ function getSystemPrompt(locale: string): string {
 3. **激进制胜**：下注和加注有两种赢法（对手弃牌或你有最好的牌）。跟注只有一种赢法。
 4. **不要被结果导向**：如果数学支持，即使诈唬被抓也是正确的打法。
 5. **适应牌桌**：如果所有人都紧，就多偷盲。如果牌桌松散，就收紧并加大价值下注。
+${preflopGuide}
 
 你给出**简洁、可执行**的建议。你必须使用中文回复。`;
   }
@@ -222,6 +255,7 @@ KEY PRINCIPLES:
 3. **Aggression wins**: Betting and raising have TWO ways to win (opponent folds OR you have the best hand). Calling only wins one way.
 4. **Don't be results-oriented**: A good bluff that gets called is still a correct play if the math supports it.
 5. **Adapt to the table**: If everyone is tight, steal more. If the table is loose, tighten up and value-bet hard.
+${preflopGuide}
 
 You give CONCISE, ACTIONABLE advice. You MUST respond in English.`;
 }

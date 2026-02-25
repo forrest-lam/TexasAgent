@@ -13,7 +13,7 @@ import SoundToggle from '../components/controls/SoundToggle';
 import LLMAdvisor from '../components/controls/LLMAdvisor';
 import { ArrowLeft, RotateCcw, Armchair, LogOut, Eye } from 'lucide-react';
 import { useI18n } from '../i18n';
-import { playSound } from '../services/sound-service';
+import { playSound, startBGM, stopBGM, isBGMEnabled } from '../services/sound-service';
 import { recordAction, recordHandResult, setCurrentRound } from '../services/player-memory';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/auth-store';
@@ -126,6 +126,11 @@ export default function Game() {
   useEffect(() => {
     let cleanupGameListeners: (() => void) | undefined;
 
+    // Start BGM when entering the game page
+    if (isBGMEnabled()) {
+      startBGM();
+    }
+
     if (isLocal) {
       setMyPlayerId('human');
       startLocalGame();
@@ -147,6 +152,7 @@ export default function Game() {
     }
 
     return () => {
+      stopBGM();
       localEngine.current?.cleanup();
       cleanupGameListeners?.();
       const socket = getSocket();
