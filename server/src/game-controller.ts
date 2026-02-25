@@ -457,6 +457,14 @@ export class GameController {
       }
     }
 
+    // Sync updated chips back to room.players so the next hand starts with correct values
+    for (const gp of state.players) {
+      const rp = this.room.players.find(p => p.id === gp.id);
+      if (rp) {
+        rp.chips = gp.chips;
+      }
+    }
+
     this.emitEvent(this.room.id, 'game:ended', null);
 
     // Schedule next hand after delay
