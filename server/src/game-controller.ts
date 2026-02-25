@@ -544,15 +544,20 @@ export class GameController {
     // Remove players with no chips
     const activePlayers = this.room.players.filter(p => p.chips > 0 || p.isAI);
 
-    // Check if only AI players remain — if so, notify to destroy the room
+    // Check if only AI players remain — if so, set room to waiting and notify
     const humanPlayers = this.room.players.filter(p => !p.isAI);
     if (humanPlayers.length === 0) {
       console.log(`[startNextHand] No human players left in room ${this.room.id}, triggering onRoomEmpty`);
+      this.room.status = 'waiting';
+      this.emitEvent(this.room.id, 'room:updated', this.room);
       if (this.onRoomEmpty) {
         this.onRoomEmpty();
       }
       return;
     }
+
+    // Actually remove busted players from the room
+    this.room.players = activePlayers;
 
     if (activePlayers.filter(p => p.chips > 0).length < 2) {
       this.room.status = 'waiting';

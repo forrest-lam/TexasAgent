@@ -141,12 +141,14 @@ export function setupSocketHandlers(io: IOServer): void {
               }
             });
             controller.setOnRoomEmpty(() => {
-              const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
-              if (socketsInRoom && socketsInRoom.size > 0) {
-                return;
-              }
               controller!.cleanup();
               gameControllers.delete(roomId);
+
+              const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+              if (socketsInRoom && socketsInRoom.size > 0) {
+                broadcastRoomList(io);
+                return;
+              }
               RoomManager.deleteRoom(roomId);
               broadcastRoomList(io);
             });
@@ -243,15 +245,19 @@ export function setupSocketHandlers(io: IOServer): void {
       });
       // Register callback for when only AI players remain in the players list
       controller.setOnRoomEmpty(() => {
+        // Always cleanup the controller — no point in AI-only games continuing
+        controller.cleanup();
+        gameControllers.delete(roomId);
+
         // Check if there are still spectators (sockets in the room)
         const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
         if (socketsInRoom && socketsInRoom.size > 0) {
-          // Spectators are still watching — keep the room alive, AI will keep playing
+          // Spectators are still watching — keep the room alive in 'waiting' status
+          // They can sit down and a new game will auto-start
+          broadcastRoomList(io);
           return;
         }
-        // No one connected — destroy the room
-        controller.cleanup();
-        gameControllers.delete(roomId);
+        // No one connected — destroy the room entirely
         RoomManager.deleteRoom(roomId);
         broadcastRoomList(io);
       });

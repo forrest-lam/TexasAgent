@@ -214,7 +214,7 @@ export default function Game() {
   const spectators = currentRoom?.spectators ?? [];
 
   return (
-    <div className="h-screen w-screen bg-casino-bg overflow-hidden relative">
+    <div className="h-screen w-full bg-casino-bg overflow-hidden relative">
       {/* Background effects */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(27,94,32,0.06)_0%,transparent_70%)]" />
 
@@ -251,12 +251,12 @@ export default function Game() {
       {/* Game log */}
       <GameLog logs={gameLog} />
 
-      {/* Spectator list (multiplayer only) */}
+      {/* Spectator list (multiplayer only) — positioned below LLM Advisor area */}
       {!isLocal && spectators.length > 0 && (
-        <div className="fixed top-10 left-2 sm:top-12 sm:left-4 z-40">
-          <div className="flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg bg-casino-card/70 border border-casino-border/40 backdrop-blur-sm">
+        <div className="fixed top-[5.5rem] left-2 sm:top-[6.5rem] sm:left-4 z-40">
+          <div className="flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg bg-casino-card/70 border border-casino-border/40 backdrop-blur-sm max-w-[160px] sm:max-w-[200px]">
             <Eye size={12} className="text-gray-500 shrink-0" />
-            <span className="text-[10px] sm:text-xs text-gray-400">
+            <span className="text-[10px] sm:text-xs text-gray-400 truncate">
               {t('game.spectators')}: {spectators.map(s => s.name).join(', ')}
             </span>
           </div>
@@ -266,7 +266,7 @@ export default function Game() {
       {/* Poker table */}
       {gameState ? (
         <>
-          <div className="w-full h-full pt-10 pb-2 px-1 sm:p-4">
+          <div className="w-full h-full pt-10 pb-2 px-2 sm:p-4">
             <PokerTable gameState={gameState} myPlayerId={myPlayerId} />
           </div>
 
