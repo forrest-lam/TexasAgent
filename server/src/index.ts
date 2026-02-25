@@ -186,6 +186,9 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
     return;
   }
 
+  const startTime = Date.now();
+  console.log(`[LLM Proxy] Request from user=${user.username} model=${model} baseUrl=${apiBaseUrl} messages=${messages.length} max_tokens=${max_tokens || 800}`);
+
   try {
     const response = await fetch(`${apiBaseUrl}/chat/completions`, {
       method: 'POST',
@@ -203,14 +206,17 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
 
     if (!response.ok) {
       const errText = await response.text().catch(() => 'Unknown error');
+      console.log(`[LLM Proxy] Failed status=${response.status} elapsed=${Date.now() - startTime}ms error=${errText.slice(0, 200)}`);
       res.status(response.status).json({ error: `LLM API error ${response.status}: ${errText}` });
       return;
     }
 
     const data = await response.json();
+    const usage = data.usage ? `prompt=${data.usage.prompt_tokens} completion=${data.usage.completion_tokens} total=${data.usage.total_tokens}` : 'no usage info';
+    console.log(`[LLM Proxy] Success elapsed=${Date.now() - startTime}ms ${usage}`);
     res.json(data);
   } catch (err: any) {
-    console.error('[LLM Proxy] Error:', err.message);
+    console.error(`[LLM Proxy] Error elapsed=${Date.now() - startTime}ms:`, err.message);
     res.status(502).json({ error: `Failed to reach LLM API: ${err.message}` });
   }
 });

@@ -88,7 +88,14 @@ export class GameController {
     }
 
     this.emitEvent(this.room.id, 'game:started', this.sanitizeState(state));
-    this.scheduleNextAction(state);
+
+    // If no one can act (all players all-in from blinds), run out the board directly
+    if (state.currentPlayerIndex === -1) {
+      console.log(`[startGame] All players all-in after blinds, running out board`);
+      this.advanceToNextPhase(state);
+    } else {
+      this.scheduleNextAction(state);
+    }
 
     return state;
   }
@@ -580,7 +587,14 @@ export class GameController {
     }
 
     this.emitEvent(this.room.id, 'game:started', this.sanitizeState(state));
-    this.scheduleNextAction(state);
+
+    // If no one can act (all players all-in from blinds), run out the board directly
+    if (state.currentPlayerIndex === -1) {
+      console.log(`[startNextHand] All players all-in after blinds, running out board`);
+      this.advanceToNextPhase(state);
+    } else {
+      this.scheduleNextAction(state);
+    }
   }
 
   private scheduleNextAction(state: GameState): void {
@@ -588,7 +602,13 @@ export class GameController {
     this.clearActionTimer();
 
     const currentPlayer = state.players[state.currentPlayerIndex];
-    if (!currentPlayer) return;
+    if (!currentPlayer) {
+      // No one can act (e.g. all players are all-in after posting blinds)
+      // Advance to next phase / run out the board
+      console.log(`[scheduleNextAction] No actionable player (currentPlayerIndex=${state.currentPlayerIndex}), advancing phase`);
+      this.advanceToNextPhase(state);
+      return;
+    }
 
     if (currentPlayer.isAI) {
       this.handleAITurn(state, currentPlayer);
