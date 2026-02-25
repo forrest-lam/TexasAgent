@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { GameState, PlayerAction } from '@texas-agent/shared';
 import { getSocket } from '../services/socket-service';
+import { playSound } from '../services/sound-service';
 
 /** Structured log entry: i18n key + parameters, translated at render time */
 export interface LogEntry {
@@ -107,6 +108,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         amount: action.amount,
         phase: state?.phase || 'unknown',
       });
+      // Play sound + haptic for other players' actions (own actions are handled in Game.tsx handleAction)
+      if (playerId !== get().myPlayerId) {
+        const soundMap: Record<string, 'fold' | 'check' | 'call' | 'raise' | 'allIn' | 'chip'> = {
+          fold: 'fold', check: 'check', call: 'call', raise: 'raise', 'all-in': 'allIn',
+        };
+        playSound(soundMap[action.type] || 'chip');
+      }
     };
 
     const onEnded = (state: GameState) => {

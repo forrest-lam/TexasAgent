@@ -5,6 +5,15 @@ let audioCtx: AudioContext | null = null;
 let enabled = true;
 let volume = 0.5;
 
+// --- Vibration (haptic feedback) support ---
+function vibrate(pattern: number | number[]) {
+  try {
+    if (navigator.vibrate) {
+      navigator.vibrate(pattern);
+    }
+  } catch {}
+}
+
 function getCtx(): AudioContext {
   if (!audioCtx) {
     audioCtx = new AudioContext();
@@ -198,6 +207,7 @@ export function playSound(type: SoundType) {
       case 'raise':
         // Aggressive raise: impact hit + power surge + chip slam
         playRaiseSound();
+        vibrate([50, 30, 100]); // short-pause-long vibration pattern
         break;
       case 'fold':
         // Soft swoosh
@@ -207,6 +217,7 @@ export function playSound(type: SoundType) {
       case 'allIn':
         // Dramatic chip push
         playChipSound();
+        vibrate([100, 50, 100, 50, 200]); // dramatic vibration pattern for all-in
         setTimeout(() => {
           playTone(523, 0.2, 'triangle', volume * 0.2);
           setTimeout(() => playTone(659, 0.2, 'triangle', volume * 0.2), 100);

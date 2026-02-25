@@ -1,4 +1,5 @@
-import { Player, GamePhase, GameState } from '@texas-agent/shared';
+import { useMemo } from 'react';
+import { Player, Card, GamePhase, evaluateHand } from '@texas-agent/shared';
 import { formatChips } from '@texas-agent/shared';
 import PokerCard from '../table/PokerCard';
 import { motion } from 'framer-motion';
@@ -12,12 +13,29 @@ interface PlayerSeatProps {
   phase: GamePhase;
   position: { x: string; y: string };
   isWinner?: boolean;
+  communityCards?: Card[];
 }
 
-export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, position, isWinner }: PlayerSeatProps) {
+export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, position, isWinner, communityCards = [] }: PlayerSeatProps) {
   // Show cards: self always, showdown for non-folded (server controls which cards are real vs hidden)
   const showCards = isSelf || (phase === 'showdown' && !player.isFolded);
-  const { t } = useI18n();
+  const { t, tHand } = useI18n();
+
+  // Evaluate best hand for players whose cards are visible and community cards exist
+  const bestHand = useMemo(() => {
+    if (!showCards || player.isFolded || player.cards.length === 0) return null;
+    // Only evaluate when there are community cards (flop+)
+    if (communityCards.length === 0) return null;
+    // Check that cards are real (not face-down placeholders — face-down cards have no rank/suit)
+    const hasRealCards = player.cards.every(c => c.rank && c.suit);
+    if (!hasRealCards) return null;
+    try {
+      const evaluation = evaluateHand(player.cards, communityCards);
+      return evaluation.rankName;
+    } catch {
+      return null;
+    }
+  }, [showCards, player.cards, player.isFolded, communityCards]);
 
   return (
     <motion.div
@@ -59,7 +77,7 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
 
       {/* Player info */}
       <div
-        className={`relative rounded-lg sm:rounded-xl px-2 py-1 sm:px-3 sm:py-2 min-w-[72px] sm:min-w-[100px] text-center transition-all duration-300
+        className={`relative rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-[76px] sm:min-w-[100px] text-center transition-all duration-300
           ${isCurrentTurn ? 'ring-2 ring-gold-400 animate-pulse-gold' : ''}
           ${isWinner ? 'ring-2 ring-gold-400 winner-glow' : ''}
           ${player.isFolded ? 'opacity-40' : ''}
@@ -84,15 +102,22 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
             ${player.isAI ? 'bg-purple-600/50' : 'bg-blue-600/50'}`}>
             {player.isAI ? <Bot size={10} className="sm:w-3.5 sm:h-3.5" /> : <User size={10} className="sm:w-3.5 sm:h-3.5" />}
           </div>
-          <span className="text-[10px] sm:text-xs font-semibold text-white truncate max-w-[50px] sm:max-w-[70px]">
+          <span className="text-[11px] sm:text-xs font-semibold text-white truncate max-w-[56px] sm:max-w-[70px]">
             {isSelf ? t('player.you') : player.name}
           </span>
         </div>
 
         {/* Chips */}
-        <div className="text-gold-400 text-[10px] sm:text-xs font-mono font-bold">
+        <div className="text-gold-400 text-[11px] sm:text-xs font-mono font-bold">
           ${formatChips(player.chips)}
         </div>
+
+        {/* Best hand rank (shown when cards are visible and community cards exist) */}
+        {bestHand && (
+          <div className="text-[9px] sm:text-[10px] font-medium text-emerald-400/90 mt-0.5 truncate max-w-[72px] sm:max-w-[90px]">
+            {tHand(bestHand)}
+          </div>
+        )}
 
         {/* All-in badge */}
         {player.isAllIn && (

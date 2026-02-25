@@ -483,6 +483,11 @@ export class GameController {
         this.room.players.push(pending);
       }
       this.room.pendingPlayers = [];
+      // Remove merged players from spectators list
+      if (this.room.spectators) {
+        const playerIds = new Set(this.room.players.map(p => p.id));
+        this.room.spectators = this.room.spectators.filter(s => !playerIds.has(s.id));
+      }
       this.emitEvent(this.room.id, 'room:updated', this.room);
     }
 
@@ -503,9 +508,15 @@ export class GameController {
 
     // Remove standing players (those who chose to stand up and did NOT re-sit)
     if (this.standingPlayers.size > 0) {
+      if (!this.room.spectators) this.room.spectators = [];
       for (const playerId of this.standingPlayers) {
         const idx = this.room.players.findIndex(p => p.id === playerId);
         if (idx !== -1) {
+          const player = this.room.players[idx];
+          // Add to spectators list if human
+          if (!player.isAI && !this.room.spectators.find(s => s.id === player.id)) {
+            this.room.spectators.push({ id: player.id, name: player.name });
+          }
           this.room.players.splice(idx, 1);
         }
       }

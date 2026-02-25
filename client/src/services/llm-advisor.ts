@@ -33,6 +33,13 @@ export function isLLMConfigured(): boolean {
   return !!apiKey || !!user?.llmConfig?.hasApiKey;
 }
 
+/** Check if an API key is actually available (env var, runtime cache, or server-side config) */
+export function hasLLMApiKey(): boolean {
+  const { apiKey } = getLLMConfig();
+  const user = useAuthStore.getState().user;
+  return !!apiKey || !!user?.llmConfig?.hasApiKey;
+}
+
 // Load the user's full API key from server (called once when advisor is used)
 export async function loadUserLLMKey(): Promise<void> {
   const { token } = getLLMConfig();

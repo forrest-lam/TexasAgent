@@ -69,6 +69,11 @@ export interface RoomConfig {
   aiEngine: AIEngineType;
 }
 
+export interface Spectator {
+  id: string;
+  name: string;
+}
+
 export interface Room {
   id: string;
   name: string;
@@ -76,6 +81,8 @@ export interface Room {
   players: Player[];
   /** Players waiting to join at the start of the next hand */
   pendingPlayers?: Player[];
+  /** Current spectators watching the game */
+  spectators?: Spectator[];
   gameState?: GameState;
   status: 'waiting' | 'playing';
   createdAt: number;

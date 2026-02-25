@@ -70,6 +70,8 @@ export function setupSocketHandlers(io: IOServer): void {
         playerRooms.set(socket.id, room.id);
         // Send room info and current game state to the spectator
         socket.emit('room:spectating', room);
+        // Broadcast updated spectator list to the room
+        io.to(room.id).emit('room:updated', room);
         // Also send current game state (sanitized — no hole cards visible)
         const controller = gameControllers.get(roomId);
         if (controller) {

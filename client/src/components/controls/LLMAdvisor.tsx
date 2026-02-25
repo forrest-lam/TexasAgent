@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { GameState, PlayerAction } from '@texas-agent/shared';
-import { isLLMConfigured, getAdvice, AdvisorSuggestion } from '../../services/llm-advisor';
+import { isLLMConfigured, hasLLMApiKey, getAdvice, AdvisorSuggestion } from '../../services/llm-advisor';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, X, Loader2, Play } from 'lucide-react';
+import { Brain, X, Loader2, Play, Settings } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import { useGameStore } from '../../stores/game-store';
+import { useNavigate } from 'react-router-dom';
 
 interface LLMAdvisorProps {
   gameState: GameState;
@@ -86,13 +87,23 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [showNoKey, setShowNoKey] = useState(false);
   const { t } = useI18n();
   const handActions = useGameStore(s => s.handActions);
+  const navigate = useNavigate();
 
   const configured = isLLMConfigured();
+  const hasKey = hasLLMApiKey();
 
   const handleGetAdvice = async () => {
-    if (!configured || loading) return;
+    if (loading) return;
+    // If no API key at all, show prompt to configure
+    if (!hasKey) {
+      setShowNoKey(true);
+      setExpanded(true);
+      return;
+    }
+    setShowNoKey(false);
     setLoading(true);
     setError(null);
     setSuggestions([]);
@@ -107,19 +118,17 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
     }
   };
 
-  if (!configured) return null;
-
   return (
     <div className="fixed left-2 top-14 sm:left-4 sm:top-16 z-50">
       {/* Toggle button */}
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        onClick={expanded ? () => setExpanded(false) : handleGetAdvice}
+        onClick={expanded ? () => { setExpanded(false); setShowNoKey(false); } : handleGetAdvice}
         disabled={loading}
         className={`flex items-center gap-1.5 sm:gap-2 px-2 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-lg backdrop-blur-md
           transition-all cursor-pointer border
-          ${isMyTurn 
+          ${isMyTurn && hasKey
             ? 'bg-purple-600/80 border-purple-400/50 text-white hover:bg-purple-600' 
             : 'bg-casino-card/80 border-casino-border/50 text-gray-400 hover:text-white'
           }
@@ -132,7 +141,7 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
 
       {/* Advice panel */}
       <AnimatePresence>
-        {expanded && (suggestions.length > 0 || loading || error) && (
+        {expanded && (suggestions.length > 0 || loading || error || showNoKey) && (
           <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -146,12 +155,28 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
                 <span className="text-xs font-semibold text-purple-300">{t('advisor.title')}</span>
               </div>
               <button 
-                onClick={() => setExpanded(false)} 
+                onClick={() => { setExpanded(false); setShowNoKey(false); }}
                 className="text-gray-500 hover:text-white cursor-pointer"
               >
                 <X size={14} />
               </button>
             </div>
+
+            {/* No API Key prompt */}
+            {showNoKey && (
+              <div className="text-center py-3 space-y-2">
+                <p className="text-xs text-gray-400">{t('advisor.noKey')}</p>
+                <button
+                  onClick={() => navigate('/settings')}
+                  className="flex items-center justify-center gap-1.5 mx-auto px-3 py-1.5 rounded-lg
+                    bg-purple-600/60 hover:bg-purple-600/80 border border-purple-400/30
+                    text-white text-xs font-medium transition-colors cursor-pointer"
+                >
+                  <Settings size={12} />
+                  {t('advisor.goSettings')}
+                </button>
+              </div>
+            )}
 
             {loading && (
               <div className="flex items-center gap-2 text-gray-400 text-xs py-2">

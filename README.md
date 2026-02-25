@@ -45,11 +45,14 @@
 
 - **动画** — Framer Motion 驱动的筹码飞行、发牌翻牌、加注特效等动画
 - **音效** — 基于 Web Audio API 的纯代码音效（发牌/过牌/跟注/加注/弃牌/全下/赢牌），支持开关和音量调节
+- **触觉反馈** — 手机端收到 raise/all-in 操作时自动震动提醒（通过 Vibration API）
 - **国际化** — 中文 / English 双语切换
 - **完整德扑规则** — preflop → flop → turn → river → showdown，支持边池、全部操作、10 种牌型评估
+- **实时牌型显示** — 真实玩家可实时看到当前手牌加公共牌的最大牌型组合（翻牌后生效）
 - **超时机制** — 多人游戏中玩家操作超时 60 秒自动弃牌并自动站起（变为观战），可随时重新坐下加入下一轮
 - **中途加入** — 玩家可以观战正在进行的游戏，点击"坐下"等待下一轮开始时自动加入
 - **站起/观战** — 参与游戏的玩家可点击"站起"，在下一轮开始时进入观战状态，AI 玩家继续自动对局，观战者可随时点击"坐下"重新加入
+- **观战者列表** — 游戏界面左上角实时显示当前房间的观战者名单
 - **房间自动清理** — 当房间内所有真实玩家离开（非观战）且无观战者时，房间自动销毁；仅剩 AI 时只要有观战者房间就保持运行
 - **玩家行为画像** — 记录所有玩家（包括 AI）的行为数据，使用稳定的玩家名称作为键存储在客户端 localStorage，跨会话持久化
 - **移动端适配** — 全页面响应式设计，手机端自适应缩放（牌桌/座位/卡牌/操作面板/顶栏均针对小屏优化）
@@ -152,6 +155,11 @@ docker run -d -p 3001:3001 --name texas-agent texas-agent
 ```
 
 > 生产环境下前端 API 请求自动使用相对路径（与页面同源），无需额外配置。如需指定后端地址，可在 Docker 构建时传入：`docker build --build-arg VITE_SERVER_URL=http://your-server:3001 -t texas-agent .`
+>
+> 如需内置 LLM 顾问（免去每个用户自行配置），可在构建时传入 LLM 参数：
+> ```bash
+> docker build --build-arg VITE_LLM_API_KEY=sk-xxx --build-arg VITE_LLM_API_BASE_URL=https://api.openai.com/v1 --build-arg VITE_LLM_MODEL=gpt-4o-mini -t texas-agent .
+> ```
 
 如需 Nginx 反代，注意配置 WebSocket 转发：
 

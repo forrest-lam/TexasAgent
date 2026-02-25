@@ -11,7 +11,7 @@ import GameLog from '../components/table/GameLog';
 import { LanguageSwitch } from '../components/controls/LanguageSwitch';
 import SoundToggle from '../components/controls/SoundToggle';
 import LLMAdvisor from '../components/controls/LLMAdvisor';
-import { ArrowLeft, RotateCcw, Armchair, LogOut } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Armchair, LogOut, Eye } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { playSound } from '../services/sound-service';
 import { recordAction, recordHandResult, setCurrentRound } from '../services/player-memory';
@@ -209,8 +209,9 @@ export default function Game() {
   const needsRestart = humanBusted || humanWonAll;
 
   // Spectator mode: player is watching but not in the game
-  const { isSpectating, isSeated, isStandingUp, sitDown, standUp } = useLobbyStore();
+  const { isSpectating, isSeated, isStandingUp, sitDown, standUp, currentRoom } = useLobbyStore();
   const isSpectator = !isLocal && (isSpectating || (gameState && !gameState.players.find(p => p.id === myPlayerId)));
+  const spectators = currentRoom?.spectators ?? [];
 
   return (
     <div className="h-screen w-screen bg-casino-bg overflow-hidden relative">
@@ -249,6 +250,18 @@ export default function Game() {
 
       {/* Game log */}
       <GameLog logs={gameLog} />
+
+      {/* Spectator list (multiplayer only) */}
+      {!isLocal && spectators.length > 0 && (
+        <div className="fixed top-10 left-2 sm:top-12 sm:left-4 z-40">
+          <div className="flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg bg-casino-card/70 border border-casino-border/40 backdrop-blur-sm">
+            <Eye size={12} className="text-gray-500 shrink-0" />
+            <span className="text-[10px] sm:text-xs text-gray-400">
+              {t('game.spectators')}: {spectators.map(s => s.name).join(', ')}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Poker table */}
       {gameState ? (

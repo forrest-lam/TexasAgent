@@ -12,7 +12,8 @@ interface PokerTableProps {
   myPlayerId: string;
 }
 
-const SEAT_POSITIONS: Record<number, { x: string; y: string }[]> = {
+// Desktop seat positions — used on sm+ screens
+const SEAT_POSITIONS_DESKTOP: Record<number, { x: string; y: string }[]> = {
   2: [
     { x: '50%', y: '75%' },
     { x: '50%', y: '12%' },
@@ -75,12 +76,85 @@ const SEAT_POSITIONS: Record<number, { x: string; y: string }[]> = {
   ],
 };
 
-function getPositions(count: number) {
-  return SEAT_POSITIONS[Math.min(Math.max(count, 2), 9)] || SEAT_POSITIONS[6];
+// Mobile seat positions — tighter layout to keep seats readable on small screens
+const SEAT_POSITIONS_MOBILE: Record<number, { x: string; y: string }[]> = {
+  2: [
+    { x: '50%', y: '78%' },
+    { x: '50%', y: '12%' },
+  ],
+  3: [
+    { x: '50%', y: '78%' },
+    { x: '18%', y: '30%' },
+    { x: '82%', y: '30%' },
+  ],
+  4: [
+    { x: '50%', y: '78%' },
+    { x: '14%', y: '50%' },
+    { x: '50%', y: '12%' },
+    { x: '86%', y: '50%' },
+  ],
+  5: [
+    { x: '50%', y: '78%' },
+    { x: '14%', y: '60%' },
+    { x: '22%', y: '15%' },
+    { x: '78%', y: '15%' },
+    { x: '86%', y: '60%' },
+  ],
+  6: [
+    { x: '50%', y: '78%' },
+    { x: '12%', y: '60%' },
+    { x: '18%', y: '15%' },
+    { x: '50%', y: '8%' },
+    { x: '82%', y: '15%' },
+    { x: '88%', y: '60%' },
+  ],
+  7: [
+    { x: '50%', y: '80%' },
+    { x: '12%', y: '65%' },
+    { x: '12%', y: '30%' },
+    { x: '32%', y: '8%' },
+    { x: '68%', y: '8%' },
+    { x: '88%', y: '30%' },
+    { x: '88%', y: '65%' },
+  ],
+  8: [
+    { x: '50%', y: '80%' },
+    { x: '15%', y: '72%' },
+    { x: '10%', y: '40%' },
+    { x: '22%', y: '10%' },
+    { x: '50%', y: '5%' },
+    { x: '78%', y: '10%' },
+    { x: '90%', y: '40%' },
+    { x: '85%', y: '72%' },
+  ],
+  9: [
+    { x: '50%', y: '80%' },
+    { x: '15%', y: '75%' },
+    { x: '10%', y: '45%' },
+    { x: '18%', y: '12%' },
+    { x: '40%', y: '5%' },
+    { x: '60%', y: '5%' },
+    { x: '82%', y: '12%' },
+    { x: '90%', y: '45%' },
+    { x: '85%', y: '75%' },
+  ],
+};
+
+function getPositions(count: number, isMobile: boolean) {
+  const positions = isMobile ? SEAT_POSITIONS_MOBILE : SEAT_POSITIONS_DESKTOP;
+  return positions[Math.min(Math.max(count, 2), 9)] || positions[6];
 }
 
 export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
-  const positions = getPositions(gameState.players.length);
+  // Detect mobile (< 640px, matching Tailwind's sm breakpoint)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const positions = getPositions(gameState.players.length, isMobile);
   const { t, tHand } = useI18n();
 
   // Build winner IDs set
@@ -194,6 +268,7 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
             phase={gameState.phase}
             position={pos}
             isWinner={winnerIds.has(player.id)}
+            communityCards={gameState.communityCards}
           />
         );
       })}

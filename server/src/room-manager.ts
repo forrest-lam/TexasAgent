@@ -69,6 +69,11 @@ export function spectateRoom(roomId: string, playerId: string, playerName: strin
   if (room.pendingPlayers?.find(p => p.id === playerId)) throw new Error('Already waiting to join');
   const totalCount = room.players.length + (room.pendingPlayers?.length ?? 0);
   if (totalCount >= room.config.maxPlayers) throw new Error('Room is full');
+  // Track spectator
+  if (!room.spectators) room.spectators = [];
+  if (!room.spectators.find(s => s.id === playerId)) {
+    room.spectators.push({ id: playerId, name: playerName });
+  }
   return room;
 }
 
@@ -98,6 +103,11 @@ export function sitDown(roomId: string, playerId: string, playerName: string, us
     seatIndex,
   });
 
+  // Remove from spectators list since they are now a pending player
+  if (room.spectators) {
+    room.spectators = room.spectators.filter(s => s.id !== playerId);
+  }
+
   return room;
 }
 
@@ -108,6 +118,9 @@ export function leaveRoom(roomId: string, playerId: string): Room | null {
   room.players = room.players.filter(p => p.id !== playerId);
   if (room.pendingPlayers) {
     room.pendingPlayers = room.pendingPlayers.filter(p => p.id !== playerId);
+  }
+  if (room.spectators) {
+    room.spectators = room.spectators.filter(s => s.id !== playerId);
   }
 
   // Delete room if no human players remain (and no pending humans)
