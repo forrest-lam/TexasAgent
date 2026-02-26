@@ -37,13 +37,16 @@ export const SUIT_COLORS: Record<Suit, string> = {
 
 export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   maxPlayers: 6,
-  smallBlind: 10,
-  bigBlind: 20,
+  smallBlind: 5,
+  bigBlind: 10,
   startingChips: 1000,
   aiCount: 3,
   aiDifficulty: 'balanced',
   aiEngine: 'rule-based',
 };
+
+/** Minimum chip denomination across all modes */
+export const MIN_CHIP_UNIT = 5;
 
 export const BLIND_LEVELS = [
   { small: 5, big: 10, label: 'Micro' },

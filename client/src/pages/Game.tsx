@@ -320,8 +320,8 @@ export default function Game() {
             onAction={handleAction}
           />
 
-          {/* Chat panel — multiplayer only */}
-          {!isLocal && <ChatPanel />}
+          {/* Chat panel — both modes */}
+          <ChatPanel isLocal={isLocal} />
 
           {/* Action panel */}
           <ActionPanel
@@ -362,7 +362,7 @@ export default function Game() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed bottom-20 right-2 sm:bottom-24 sm:right-4 z-50"
+              className="fixed bottom-32 right-2 sm:bottom-36 sm:right-4 z-50"
             >
               {isStandingUp ? (
                 <div className="px-3 py-2 rounded-lg bg-casino-card/80 border border-yellow-500/30 text-yellow-400 text-xs backdrop-blur-sm">

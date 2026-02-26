@@ -16,13 +16,45 @@ const PRESET_MESSAGES = [
   '好牌！',
 ];
 
-export default function ChatPanel() {
+const AI_RESPONSES: Record<string, string[]> = {
+  '快点啊！': ['别催，我在想...', '急什么，好牌需要思考', '耐心点朋友'],
+  '等到花儿都谢了': ['花谢了还有下一季', '马上马上', '别急嘛~'],
+  '你行不行？': ['看好了', '等着瞧', '别小看我'],
+  '太菜了吧': ['只是运气差而已', '下把让你看看', '哼，走着瞧'],
+  '哈哈哈': ['笑什么笑', '有什么好笑的', '😤'],
+  '服了': ['认输了？', '这才刚开始', '还早呢'],
+  '运气好': ['实力实力', '运气也是实力的一部分', '谢谢夸奖'],
+  'GG': ['GG', 'Good game!', '再来一局？'],
+  '加油！': ['谢谢鼓励', '一起加油！', '💪'],
+  '好牌！': ['一般一般', '运气运气', '还行吧'],
+};
+
+const AI_GENERIC_RESPONSES = [
+  '嗯嗯',
+  '有意思',
+  '继续继续',
+  '看牌说话',
+  '好的好的',
+  '...',
+  '专心打牌吧',
+  '😎',
+  '🤔',
+];
+
+interface ChatPanelProps {
+  isLocal?: boolean;
+}
+
+export default function ChatPanel({ isLocal }: ChatPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState('');
   const [hasNew, setHasNew] = useState(false);
-  const { chatMessages, sendChatMessage, myPlayerId } = useGameStore();
+  const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
+  const { chatMessages, sendChatMessage, myPlayerId, gameState } = useGameStore();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const prevCountRef = useRef(chatMessages.length);
+
+  const messages = isLocal ? localMessages : chatMessages;
+  const prevCountRef = useRef(messages.length);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -30,16 +62,52 @@ export default function ChatPanel() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
     // Show new message indicator when closed
-    if (chatMessages.length > prevCountRef.current && !isOpen) {
+    if (messages.length > prevCountRef.current && !isOpen) {
       setHasNew(true);
     }
-    prevCountRef.current = chatMessages.length;
-  }, [chatMessages.length]);
+    prevCountRef.current = messages.length;
+  }, [messages.length, isOpen]);
+
+  const getRandomAIResponse = (text: string): string => {
+    const specific = AI_RESPONSES[text];
+    if (specific) {
+      return specific[Math.floor(Math.random() * specific.length)];
+    }
+    return AI_GENERIC_RESPONSES[Math.floor(Math.random() * AI_GENERIC_RESPONSES.length)];
+  };
 
   const handleSend = (msg?: string) => {
     const text = (msg || inputText).trim();
     if (!text) return;
-    sendChatMessage(text);
+
+    if (isLocal) {
+      // Add player message
+      const playerMsg: ChatMessage = {
+        playerId: 'human',
+        playerName: 'You',
+        message: text,
+        timestamp: Date.now(),
+      };
+      setLocalMessages(prev => [...prev.slice(-19), playerMsg]);
+
+      // Random AI responds after a short delay
+      const aiPlayers = gameState?.players.filter(p => p.isAI && !p.isFolded) ?? [];
+      if (aiPlayers.length > 0 && Math.random() < 0.6) {
+        const responder = aiPlayers[Math.floor(Math.random() * aiPlayers.length)];
+        const delay = 800 + Math.random() * 2000;
+        setTimeout(() => {
+          const aiMsg: ChatMessage = {
+            playerId: responder.id,
+            playerName: responder.name,
+            message: getRandomAIResponse(text),
+            timestamp: Date.now(),
+          };
+          setLocalMessages(prev => [...prev.slice(-19), aiMsg]);
+        }, delay);
+      }
+    } else {
+      sendChatMessage(text);
+    }
     setInputText('');
   };
 
@@ -64,7 +132,7 @@ export default function ChatPanel() {
               <div className="flex items-center gap-2">
                 <MessageCircle size={14} className="text-blue-400" />
                 <span className="text-sm font-semibold text-white">聊天</span>
-                <span className="text-xs text-gray-500">{chatMessages.length} 条</span>
+                <span className="text-xs text-gray-500">{messages.length} 条</span>
               </div>
               <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
                 <X size={14} className="text-gray-400 hover:text-white" />
@@ -76,11 +144,11 @@ export default function ChatPanel() {
               ref={scrollRef}
               className="h-48 overflow-y-auto px-3 py-2 space-y-1.5 scroll-smooth"
             >
-              {chatMessages.length === 0 ? (
+              {messages.length === 0 ? (
                 <p className="text-xs text-gray-500 text-center py-4">暂无消息，发个消息打招呼吧！</p>
               ) : (
-                chatMessages.map((msg, i) => (
-                  <ChatBubble key={i} msg={msg} isSelf={msg.playerId === myPlayerId} />
+                messages.map((msg, i) => (
+                  <ChatBubble key={i} msg={msg} isSelf={msg.playerId === myPlayerId || (isLocal && msg.playerId === 'human')} />
                 ))
               )}
             </div>

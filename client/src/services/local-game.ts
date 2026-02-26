@@ -404,23 +404,94 @@ export class LocalGameEngine {
     }, delay);
   }
 
+  /**
+   * Calculate a valid raise amount for AI, respecting Texas Hold'em min-raise rules.
+   * The raise must be >= state.minRaise (which tracks the minimum legal total bet).
+   * Amount is aligned to bigBlind increments and capped at player's stack.
+   */
+  private calculateAIRaiseAmount(player: Player, strength: number): number {
+    const { minRaise, currentBet, bigBlind, pot } = this.state;
+    const maxRaise = player.chips + player.currentBet;
+
+    // The raise increment (how much above currentBet the minRaise requires)
+    const increment = Math.max(minRaise - currentBet, bigBlind);
+
+    // Determine multiplier based on hand strength
+    let multiplier: number;
+    const personality = player.aiPersonality || 'balanced';
+    const aggFactor = personality === 'aggressive' ? 0.7 : personality === 'conservative' ? 0.3 : 0.5;
+
+    if (strength >= 0.85) {
+      multiplier = aggFactor >= 0.7 ? 4 : aggFactor >= 0.5 ? 3 : 2;
+    } else if (strength >= 0.7) {
+      multiplier = aggFactor >= 0.7 ? 3 : 2;
+    } else if (strength >= 0.55) {
+      multiplier = 2;
+    } else {
+      multiplier = 1; // minimum raise for bluffs/marginal hands
+    }
+
+    // Also consider pot-relative sizing
+    const desiredPotPct = 0.5 + strength * aggFactor * 0.5;
+    const desiredTotal = Math.floor(pot * desiredPotPct) + currentBet;
+    const potMultiplier = Math.max(1, Math.round((desiredTotal - currentBet) / increment));
+    multiplier = Math.min(multiplier, potMultiplier);
+    multiplier = Math.max(1, multiplier);
+
+    let raiseAmount = currentBet + increment * multiplier;
+
+    // Align to bigBlind
+    raiseAmount = Math.round(raiseAmount / bigBlind) * bigBlind;
+
+    // Clamp to [minRaise, maxRaise]
+    raiseAmount = Math.max(minRaise, Math.min(raiseAmount, maxRaise));
+
+    // Cap raise at 40% of stack for medium-strength hands
+    if (strength < 0.7) {
+      const stackCap = Math.floor((player.chips * 0.4 + player.currentBet) / bigBlind) * bigBlind;
+      raiseAmount = Math.min(raiseAmount, stackCap);
+      raiseAmount = Math.max(raiseAmount, minRaise);
+    }
+
+    // Final alignment
+    raiseAmount = Math.round(raiseAmount / bigBlind) * bigBlind;
+    raiseAmount = Math.max(minRaise, Math.min(raiseAmount, maxRaise));
+
+    return raiseAmount;
+  }
+
   private makeAIDecision(player: Player): void {
     const callAmount = this.state.currentBet - player.currentBet;
     const strength = this.estimateSimpleStrength(player);
+    const maxRaise = player.chips + player.currentBet;
 
     let action: PlayerAction;
 
     if (callAmount === 0) {
+      // No bet to call: check or raise
       if (strength > 0.7 && Math.random() < 0.5) {
-        const raiseAmt = Math.min(this.state.minRaise + Math.floor(Math.random() * this.state.bigBlind * 3), player.chips + player.currentBet);
-        action = raiseAmt >= this.state.minRaise ? { type: 'raise', amount: raiseAmt } : { type: 'check' };
+        const raiseAmt = this.calculateAIRaiseAmount(player, strength);
+        if (raiseAmt >= maxRaise) {
+          action = { type: 'all-in' };
+        } else if (raiseAmt >= this.state.minRaise) {
+          action = { type: 'raise', amount: raiseAmt };
+        } else {
+          action = { type: 'check' };
+        }
       } else {
         action = { type: 'check' };
       }
     } else if (strength > 0.6 || (strength > 0.35 && callAmount <= this.state.bigBlind * 3)) {
+      // Consider raising with strong hands
       if (strength > 0.8 && Math.random() < 0.4) {
-        const raiseAmt = Math.min(this.state.minRaise + Math.floor(Math.random() * this.state.pot * 0.5), player.chips + player.currentBet);
-        action = raiseAmt >= this.state.minRaise ? { type: 'raise', amount: raiseAmt } : { type: 'call' };
+        const raiseAmt = this.calculateAIRaiseAmount(player, strength);
+        if (raiseAmt >= maxRaise) {
+          action = { type: 'all-in' };
+        } else if (raiseAmt >= this.state.minRaise && player.chips >= (raiseAmt - player.currentBet)) {
+          action = { type: 'raise', amount: raiseAmt };
+        } else {
+          action = player.chips >= callAmount ? { type: 'call' } : { type: 'all-in' };
+        }
       } else {
         action = player.chips >= callAmount ? { type: 'call' } : { type: 'all-in' };
       }
@@ -437,7 +508,14 @@ export class LocalGameEngine {
     if (isValidAction(this.state, player.id, action)) {
       this.processAction(player.id, action);
     } else {
-      this.processAction(player.id, callAmount === 0 ? { type: 'check' } : { type: 'fold' });
+      // Fallback: try call, then check, then fold
+      if (callAmount === 0) {
+        this.processAction(player.id, { type: 'check' });
+      } else if (player.chips >= callAmount) {
+        this.processAction(player.id, { type: 'call' });
+      } else {
+        this.processAction(player.id, { type: 'fold' });
+      }
     }
   }
 
