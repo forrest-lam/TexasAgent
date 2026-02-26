@@ -415,6 +415,15 @@ export function setupSocketHandlers(io: IOServer): void {
       const personalState = controller.getSanitizedStateForPlayer(socket.id);
       if (personalState) {
         socket.emit('game:state', personalState);
+
+        // Re-send your-turn if it's currently this player's turn
+        const gs = controller.getState();
+        if (gs && gs.phase !== 'showdown' && gs.phase !== 'waiting') {
+          const currentPlayer = gs.players[gs.currentPlayerIndex];
+          if (currentPlayer && currentPlayer.id === socket.id && !currentPlayer.isAI) {
+            socket.emit('game:your-turn', { timeLimit: ACTION_TIMEOUT });
+          }
+        }
       }
     });
 
