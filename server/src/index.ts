@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { ServerToClientEvents, ClientToServerEvents, AuthResponse } from '@texas-agent/shared';
 import { setupSocketHandlers } from './socket-handler';
 import { signToken, authMiddleware, socketAuthMiddleware } from './auth';
-import { createUser, authenticateUser, getUserById, updateUserLLMConfig, setUserChips } from './user-store';
+import { createUser, authenticateUser, getUserById, updateUserLLMConfig, setUserChips, getAllUsers } from './user-store';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -226,8 +226,8 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
       return;
     }
 
-    const data = await response.json();
-    const usage = data.usage ? `prompt=${data.usage.prompt_tokens} completion=${data.usage.completion_tokens} total=${data.usage.total_tokens}` : 'no usage info';
+    const data = await response.json() as any;
+    const usage = (data as any).usage ? `prompt=${data.usage.prompt_tokens} completion=${data.usage.completion_tokens} total=${data.usage.total_tokens}` : 'no usage info';
     console.log(`[LLM Proxy] Success elapsed=${Date.now() - startTime}ms ${usage}`);
     res.json(data);
   } catch (err: any) {

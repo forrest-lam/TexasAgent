@@ -51,6 +51,7 @@ export class AIPlayer {
       playerBet: player.currentBet,
       playerChips: player.chips,
       minRaise: state.minRaise,
+      bigBlind: state.bigBlind,
       phase: state.phase,
       numActivePlayers: activePlayers.length,
       position,

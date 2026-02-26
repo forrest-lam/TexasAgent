@@ -117,6 +117,7 @@ export interface AIDecisionContext {
   playerBet: number;
   playerChips: number;
   minRaise: number;
+  bigBlind: number;
   phase: GamePhase;
   numActivePlayers: number;
   position: 'early' | 'middle' | 'late' | 'blinds';
