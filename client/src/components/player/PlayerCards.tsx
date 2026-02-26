@@ -17,10 +17,10 @@ export default function PlayerCards({ cards, showCards, isFolded, size = 'sm' }:
         animate={{ opacity: 0.3 }}
         className="flex gap-0.5"
       >
-        <div className={`${size === 'sm' ? 'w-8 h-11 sm:w-10 sm:h-14' : 'w-10 h-14 sm:w-14 sm:h-20'} rounded-lg bg-gray-700/50 border border-gray-600/30 flex items-center justify-center`}>
+        <div className={`${size === 'sm' ? 'w-10 h-14 sm:w-12 sm:h-17' : 'w-12 h-17 sm:w-16 sm:h-22'} rounded-lg bg-gray-700/50 border border-gray-600/30 flex items-center justify-center`}>
           <span className="text-gray-600 text-xs italic">✕</span>
         </div>
-        <div className={`${size === 'sm' ? 'w-8 h-11 sm:w-10 sm:h-14' : 'w-10 h-14 sm:w-14 sm:h-20'} rounded-lg bg-gray-700/50 border border-gray-600/30 flex items-center justify-center`}>
+        <div className={`${size === 'sm' ? 'w-10 h-14 sm:w-12 sm:h-17' : 'w-12 h-17 sm:w-16 sm:h-22'} rounded-lg bg-gray-700/50 border border-gray-600/30 flex items-center justify-center`}>
           <span className="text-gray-600 text-xs italic">✕</span>
         </div>
       </motion.div>

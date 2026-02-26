@@ -184,6 +184,14 @@ export class GameController {
     this.standingPlayers.add(playerId);
   }
 
+  /** Cancel standing/timeout for a reconnected player (check both old and new socket IDs) */
+  cancelPlayerStand(newId: string, oldId: string): void {
+    this.standingPlayers.delete(newId);
+    this.standingPlayers.delete(oldId);
+    this.timedOutPlayers.delete(newId);
+    this.timedOutPlayers.delete(oldId);
+  }
+
   getState(): GameState | undefined {
     return this.room.gameState;
   }

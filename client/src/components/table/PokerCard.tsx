@@ -12,15 +12,15 @@ interface PokerCardProps {
 }
 
 const sizeClasses = {
-  sm: 'w-10 h-14 text-xs',
-  md: 'w-14 h-20 text-sm',
-  lg: 'w-18 h-26 text-base',
+  sm: 'w-12 h-17 text-sm',
+  md: 'w-16 h-22 text-base',
+  lg: 'w-20 h-28 text-lg',
 };
 
 const responsiveSizeClasses = {
-  sm: 'w-8 h-11 text-[10px] sm:w-10 sm:h-14 sm:text-xs',
-  md: 'w-10 h-14 text-xs sm:w-14 sm:h-20 sm:text-sm',
-  lg: 'w-14 h-20 text-sm sm:w-18 sm:h-26 sm:text-base',
+  sm: 'w-10 h-14 text-xs sm:w-12 sm:h-17 sm:text-sm',
+  md: 'w-12 h-17 text-sm sm:w-16 sm:h-22 sm:text-base',
+  lg: 'w-16 h-22 text-base sm:w-20 sm:h-28 sm:text-lg',
 };
 
 export default function PokerCard({ card, faceDown = false, size = 'md', delay = 0, responsiveSize = false }: PokerCardProps) {
@@ -56,7 +56,7 @@ export default function PokerCard({ card, faceDown = false, size = 'md', delay =
         <span style={{ color: suitColor }}>{suitSymbol}</span>
       </div>
       <div className="flex-1 flex items-center justify-center">
-        <span className={`${size === 'sm' ? 'text-base sm:text-lg' : 'text-lg sm:text-2xl'}`} style={{ color: suitColor }}>
+        <span className={`${size === 'sm' ? 'text-lg sm:text-xl' : 'text-xl sm:text-3xl'}`} style={{ color: suitColor }}>
           {suitSymbol}
         </span>
       </div>

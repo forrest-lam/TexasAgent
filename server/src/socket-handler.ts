@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { ServerToClientEvents, ClientToServerEvents, PlayerAction, AIPersonality, AIEngineType, RoomConfig } from '@texas-agent/shared';
+import { ServerToClientEvents, ClientToServerEvents, PlayerAction, AIPersonality, AIEngineType, RoomConfig, ACTION_TIMEOUT } from '@texas-agent/shared';
 import * as RoomManager from './room-manager';
 import { GameController } from './game-controller';
 import { getUserById, updateUserChips, updateUserStats } from './user-store';
@@ -11,6 +11,9 @@ const gameControllers = new Map<string, GameController>();
 const playerRooms = new Map<string, string>();
 // Map socket.id → userId for chip settlement
 const socketUserMap = new Map<string, string>();
+// Map userId → { roomId, socketId, username } for reconnection support
+const disconnectedPlayers = new Map<string, { roomId: string; socketId: string; username: string; disconnectTime: number }>();
+const RECONNECT_GRACE_PERIOD = 60000; // 60 seconds to reconnect
 
 export function setupSocketHandlers(io: IOServer): void {
   io.on('connection', (socket: IOSocket) => {
@@ -18,6 +21,82 @@ export function setupSocketHandlers(io: IOServer): void {
     const username = (socket as any).data.username;
     console.log(`Player connected: ${username} (${socket.id})`);
     socketUserMap.set(socket.id, userId);
+
+    // Check for reconnection — restore player to their previous room/game
+    const disconnectInfo = disconnectedPlayers.get(userId);
+    if (disconnectInfo && Date.now() - disconnectInfo.disconnectTime < RECONNECT_GRACE_PERIOD) {
+      const { roomId, socketId: oldSocketId } = disconnectInfo;
+      disconnectedPlayers.delete(userId);
+      const room = RoomManager.getRoom(roomId);
+      if (room) {
+        // Replace old socket ID with new socket ID in room players
+        const player = room.players.find(p => p.id === oldSocketId);
+        const pendingPlayer = room.pendingPlayers?.find(p => p.id === oldSocketId);
+        const targetPlayer = player || pendingPlayer;
+        if (targetPlayer) {
+          const newSocketId = socket.id;
+          targetPlayer.id = newSocketId;
+          targetPlayer.name = username;
+
+          // Update game state player IDs too
+          const controller = gameControllers.get(roomId);
+          if (controller) {
+            const gameState = controller.getState();
+            if (gameState) {
+              const gp = gameState.players.find(p => p.id === oldSocketId);
+              if (gp) {
+                gp.id = newSocketId;
+              }
+              // Update actedThisRound references
+              if (gameState.actedThisRound) {
+                gameState.actedThisRound = gameState.actedThisRound.map(id => id === oldSocketId ? newSocketId : id);
+              }
+              // Update lastAction reference
+              if (gameState.lastAction && gameState.lastAction.playerId === oldSocketId) {
+                gameState.lastAction.playerId = newSocketId;
+              }
+            }
+            // Cancel standing/timeout for reconnected player
+            controller.cancelPlayerStand(newSocketId, oldSocketId);
+          }
+
+          // Update maps
+          playerRooms.delete(oldSocketId);
+          playerRooms.set(newSocketId, roomId);
+          socketUserMap.delete(oldSocketId);
+          socketUserMap.set(newSocketId, userId);
+
+          // Update spectators if needed
+          if (room.spectators) {
+            const spec = room.spectators.find(s => s.id === oldSocketId);
+            if (spec) spec.id = newSocketId;
+          }
+
+          socket.join(roomId);
+          socket.emit('room:joined', room);
+          io.to(roomId).emit('room:updated', room);
+
+          // Send current game state
+          if (controller) {
+            const personalState = controller.getSanitizedStateForPlayer(newSocketId);
+            if (personalState) {
+              socket.emit('game:state', personalState);
+            }
+            // Re-send turn notification if it's this player's turn
+            const gameState = controller.getState();
+            if (gameState) {
+              const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+              if (currentPlayer && currentPlayer.id === newSocketId) {
+                socket.emit('game:your-turn', { timeLimit: ACTION_TIMEOUT });
+              }
+            }
+          }
+
+          console.log(`[Reconnect] ${username} reconnected to room ${roomId} (${oldSocketId} → ${newSocketId})`);
+          broadcastRoomList(io);
+        }
+      }
+    }
 
     // Room list
     socket.on('room:list', () => {
@@ -322,6 +401,41 @@ export function setupSocketHandlers(io: IOServer): void {
     // Disconnect
     socket.on('disconnect', () => {
       console.log(`Player disconnected: ${username} (${socket.id})`);
+      const roomId = playerRooms.get(socket.id);
+      
+      // If player is in an active game, give them time to reconnect
+      if (roomId) {
+        const room = RoomManager.getRoom(roomId);
+        const controller = gameControllers.get(roomId);
+        if (room && controller && room.status === 'playing') {
+          const player = room.players.find(p => p.id === socket.id);
+          if (player && !player.isAI) {
+            // Store disconnect info for reconnection
+            disconnectedPlayers.set(userId, {
+              roomId,
+              socketId: socket.id,
+              username,
+              disconnectTime: Date.now(),
+            });
+            console.log(`[Disconnect] ${username} saved for reconnection (room: ${roomId}, grace: ${RECONNECT_GRACE_PERIOD / 1000}s)`);
+            
+            // Schedule cleanup after grace period
+            setTimeout(() => {
+              const info = disconnectedPlayers.get(userId);
+              if (info && info.socketId === socket.id) {
+                console.log(`[Disconnect] Grace period expired for ${username}, removing from room ${roomId}`);
+                disconnectedPlayers.delete(userId);
+                handleLeaveRoom(io, socket);
+              }
+            }, RECONNECT_GRACE_PERIOD);
+            
+            // Don't call handleLeaveRoom yet — give player time to reconnect
+            socketUserMap.delete(socket.id);
+            return;
+          }
+        }
+      }
+      
       handleLeaveRoom(io, socket);
       socketUserMap.delete(socket.id);
     });

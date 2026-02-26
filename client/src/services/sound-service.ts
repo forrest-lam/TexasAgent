@@ -191,6 +191,99 @@ function playRaiseSound() {
   }, 120);
 }
 
+function playAllInSound() {
+  if (!enabled) return;
+  const ctx = getCtx();
+  const now = ctx.currentTime;
+
+  // 1) Deep sub-bass boom
+  const boomOsc = ctx.createOscillator();
+  const boomGain = ctx.createGain();
+  boomOsc.type = 'sine';
+  boomOsc.frequency.setValueAtTime(60, now);
+  boomOsc.frequency.exponentialRampToValueAtTime(20, now + 0.4);
+  boomGain.gain.setValueAtTime(volume * 0.7, now);
+  boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+  boomOsc.connect(boomGain);
+  boomGain.connect(ctx.destination);
+  boomOsc.start(now);
+  boomOsc.stop(now + 0.5);
+
+  // 2) Explosive noise burst
+  const bufLen = ctx.sampleRate * 0.15;
+  const noiseBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+  const noiseData = noiseBuf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) {
+    noiseData[i] = (Math.random() * 2 - 1) * 0.7;
+  }
+  const noiseSrc = ctx.createBufferSource();
+  noiseSrc.buffer = noiseBuf;
+  const noiseFilt = ctx.createBiquadFilter();
+  noiseFilt.type = 'bandpass';
+  noiseFilt.frequency.value = 1500;
+  noiseFilt.Q.value = 0.8;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(volume * 0.35, now);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+  noiseSrc.connect(noiseFilt);
+  noiseFilt.connect(noiseGain);
+  noiseGain.connect(ctx.destination);
+  noiseSrc.start(now);
+  noiseSrc.stop(now + 0.15);
+
+  // 3) Heavy chip cascade (lots of chips sliding)
+  for (let i = 0; i < 8; i++) {
+    const delay = 0.05 + i * 0.025;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 3000 + Math.random() * 4000;
+    gain.gain.setValueAtTime(volume * 0.15, now + delay);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.07);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now + delay);
+    osc.stop(now + delay + 0.07);
+  }
+
+  // 4) Dramatic rising power chord (C-E-G-C)
+  setTimeout(() => {
+    const t = ctx.currentTime;
+    const chordNotes = [261.63, 329.63, 392.00, 523.25, 659.25];
+    chordNotes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = i < 2 ? 'sawtooth' : 'triangle';
+      osc.frequency.setValueAtTime(freq * 0.5, t);
+      osc.frequency.exponentialRampToValueAtTime(freq, t + 0.15);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(volume * 0.12, t + 0.08);
+      gain.gain.setValueAtTime(volume * 0.12, t + 0.3);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.6);
+    });
+  }, 200);
+
+  // 5) Final impact stinger
+  setTimeout(() => {
+    const t = ctx.currentTime;
+    const stingOsc = ctx.createOscillator();
+    const stingGain = ctx.createGain();
+    stingOsc.type = 'square';
+    stingOsc.frequency.setValueAtTime(880, t);
+    stingOsc.frequency.exponentialRampToValueAtTime(440, t + 0.1);
+    stingGain.gain.setValueAtTime(volume * 0.2, t);
+    stingGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    stingOsc.connect(stingGain);
+    stingGain.connect(ctx.destination);
+    stingOsc.start(t);
+    stingOsc.stop(t + 0.15);
+  }, 500);
+}
+
 export function playSound(type: SoundType) {
   if (!enabled) return;
   try {
@@ -219,14 +312,9 @@ export function playSound(type: SoundType) {
         playTone(300, 0.15, 'sine', volume * 0.08);
         break;
       case 'allIn':
-        // Dramatic chip push
-        playChipSound();
+        // Epic all-in: dramatic build-up + explosive impact
+        playAllInSound();
         vibrate([100, 50, 100, 50, 200]); // dramatic vibration pattern for all-in
-        setTimeout(() => {
-          playTone(523, 0.2, 'triangle', volume * 0.2);
-          setTimeout(() => playTone(659, 0.2, 'triangle', volume * 0.2), 100);
-          setTimeout(() => playTone(784, 0.3, 'triangle', volume * 0.25), 200);
-        }, 150);
         break;
       case 'win':
         // Victory fanfare

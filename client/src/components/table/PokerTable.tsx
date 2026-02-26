@@ -190,7 +190,7 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
   const [raiseEffect, setRaiseEffect] = useState<{
     key: string; position: { x: string; y: string }; isAllIn: boolean;
   } | null>(null);
-  const [screenShake, setScreenShake] = useState(false);
+  const [screenShake, setScreenShake] = useState<'none' | 'normal' | 'heavy'>('none');
   const prevActionRef = useRef<string | null>(null);
 
   // Compute a stable string key for lastAction to avoid re-triggering on object reference changes
@@ -206,8 +206,8 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
       const orderIdx = ordered.findIndex(p => p.id === la.playerId);
       const pos = positions[orderIdx] || { x: '50%', y: '50%' };
       setRaiseEffect({ key: lastActionKey, position: pos, isAllIn: la.action.type === 'all-in' });
-      setScreenShake(true);
-      setTimeout(() => setScreenShake(false), 400);
+      setScreenShake(la.action.type === 'all-in' ? 'heavy' : 'normal');
+      setTimeout(() => setScreenShake('none'), la.action.type === 'all-in' ? 500 : 400);
     }
   }, [lastActionKey]);
 
@@ -215,7 +215,7 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
   const phaseLabel = t(phaseKey);
 
   return (
-    <div className={`relative w-full h-full ${screenShake ? 'screen-shake' : ''}`}>
+    <div className={`relative w-full h-full ${screenShake === 'heavy' ? 'screen-shake-heavy' : screenShake === 'normal' ? 'screen-shake' : ''}`}>
       {/* Table surface — shifted left on mobile to match seat layout */}
       <div className="absolute inset-[2%] sm:inset-[5%] max-sm:-translate-x-[3%] rounded-[50%] bg-felt-gradient shadow-2xl border-4 sm:border-8 border-amber-900/60"
         style={{ boxShadow: 'inset 0 0 60px rgba(0,0,0,0.4), 0 0 40px rgba(0,0,0,0.6)' }}

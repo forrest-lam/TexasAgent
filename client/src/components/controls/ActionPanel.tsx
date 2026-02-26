@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { GameState, PlayerAction } from '@texas-agent/shared';
 import { formatChips } from '@texas-agent/shared';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useI18n } from '../../i18n';
 import { useGameStore } from '../../stores/game-store';
+import { Minus, Plus } from 'lucide-react';
 
 interface ActionPanelProps {
   gameState: GameState;
@@ -92,11 +92,22 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
     setShowRaise(false);
   };
 
-  const quickBets = [
-    { label: t('action.halfPot'), amount: Math.max(minRaise, Math.floor(gameState.pot / 2) + player.currentBet) },
-    { label: t('action.threeFourPot'), amount: Math.max(minRaise, Math.floor(gameState.pot * 0.75) + player.currentBet) },
-    { label: t('action.pot'), amount: Math.max(minRaise, gameState.pot + player.currentBet) },
-  ].filter(b => b.amount <= maxRaise);
+  // Snap raise amount to nearest bigBlind increment
+  const snapToBB = (val: number) => {
+    const snapped = Math.round(val / gameState.bigBlind) * gameState.bigBlind;
+    return Math.max(minRaise, Math.min(maxRaise, snapped));
+  };
+
+  // Quick raise presets: pot multipliers
+  const quickRaises = [
+    { label: t('action.minRaise'), amount: minRaise },
+    { label: '½ Pot', amount: snapToBB(Math.floor(gameState.pot / 2) + player.currentBet) },
+    { label: '¾ Pot', amount: snapToBB(Math.floor(gameState.pot * 0.75) + player.currentBet) },
+    { label: '1x Pot', amount: snapToBB(gameState.pot + player.currentBet) },
+    { label: '2x Pot', amount: snapToBB(gameState.pot * 2 + player.currentBet) },
+  ].filter(b => b.amount >= minRaise && b.amount <= maxRaise)
+   // Remove duplicates (by amount)
+   .filter((item, index, self) => self.findIndex(x => x.amount === item.amount) === index);
 
   return (
     <AnimatePresence>
@@ -138,39 +149,64 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
                   className="overflow-hidden"
                 >
                   <div className="bg-casino-card/90 rounded-xl p-2 sm:p-3 border border-casino-border/50 space-y-1.5 sm:space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-400">{t('action.raiseTo')}:</span>
-                      <span className="text-gold-400 font-bold text-base sm:text-lg">${formatChips(raiseAmount)}</span>
+                    {/* Amount display with +/- buttons */}
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => setRaiseAmount(snapToBB(raiseAmount - gameState.bigBlind))}
+                        disabled={raiseAmount <= minRaise}
+                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center
+                          text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      >
+                        <Minus size={16} />
+                      </button>
+                      <div className="text-center">
+                        <span className="text-gray-400 text-xs">{t('action.raiseTo')}</span>
+                        <div className="text-gold-400 font-bold text-lg sm:text-xl">
+                          {raiseAmount >= maxRaise ? 'ALL IN' : `$${formatChips(raiseAmount)}`}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setRaiseAmount(snapToBB(raiseAmount + gameState.bigBlind))}
+                        disabled={raiseAmount >= maxRaise}
+                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center
+                          text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      >
+                        <Plus size={16} />
+                      </button>
                     </div>
-                    <Slider
-                      value={[raiseAmount]}
-                      min={minRaise}
-                      max={maxRaise}
-                      step={gameState.bigBlind}
-                      onValueChange={([v]) => setRaiseAmount(v)}
-                      className="py-2"
-                    />
-                    <div className="flex gap-2">
-                      {quickBets.map((qb) => (
+
+                    {/* Quick raise preset buttons */}
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                      {quickRaises.map((qr) => (
                         <button
-                          key={qb.label}
-                          onClick={() => setRaiseAmount(qb.amount)}
-                          className="flex-1 px-2 py-1.5 text-xs font-medium rounded-lg
-                            bg-white/5 border border-white/10 text-gray-300
-                            hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                          key={qr.label}
+                          onClick={() => setRaiseAmount(qr.amount)}
+                          className={`flex-1 min-w-[60px] px-2 py-2 text-xs sm:text-sm font-medium rounded-lg
+                            border transition-all cursor-pointer
+                            ${raiseAmount === qr.amount
+                              ? 'bg-gold-500/20 border-gold-500/50 text-gold-400'
+                              : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'
+                            }`}
                         >
-                          {qb.label}
+                          <div>{qr.label}</div>
+                          <div className="text-[10px] sm:text-xs opacity-70">${formatChips(qr.amount)}</div>
                         </button>
                       ))}
                       <button
                         onClick={() => setRaiseAmount(maxRaise)}
-                        className="flex-1 px-2 py-1.5 text-xs font-medium rounded-lg
-                          bg-red-600/20 border border-red-500/30 text-red-400
-                          hover:bg-red-600/30 hover:text-red-300 transition-colors cursor-pointer"
+                        className={`flex-1 min-w-[60px] px-2 py-2 text-xs sm:text-sm font-medium rounded-lg
+                          border transition-all cursor-pointer
+                          ${raiseAmount >= maxRaise
+                            ? 'bg-red-600/30 border-red-500/50 text-red-300'
+                            : 'bg-red-600/10 border-red-500/20 text-red-400 hover:bg-red-600/20 hover:text-red-300'
+                          }`}
                       >
-                        {t('action.allIn')}
+                        <div>{t('action.allIn')}</div>
+                        <div className="text-[10px] sm:text-xs opacity-70">${formatChips(maxRaise)}</div>
                       </button>
                     </div>
+
+                    {/* Confirm / Cancel */}
                     <div className="flex gap-2">
                       <Button
                         onClick={() => setShowRaise(false)}
