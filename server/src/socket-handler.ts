@@ -359,15 +359,9 @@ export function setupSocketHandlers(io: IOServer): void {
       io.to(room.id).emit('room:updated', room);
       broadcastRoomList(io);
 
-      // Send personalized state to each human player (with their own cards visible)
-      for (const player of room.players) {
-        if (!player.isAI) {
-          const personalState = controller.getSanitizedStateForPlayer(player.id);
-          if (personalState) {
-            io.to(player.id).emit('game:state', personalState);
-          }
-        }
-      }
+      // Note: personalized game state is already sent via emitGameEvent('game:started')
+      // inside controller.startGame(). A duplicate game:state here races with game:your-turn
+      // and resets isMyTurn to false on the client (causing 2-3 player action freeze).
     });
 
     // Player action
