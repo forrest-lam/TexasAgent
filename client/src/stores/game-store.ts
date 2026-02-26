@@ -142,7 +142,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const socket = getSocket();
 
     const onStarted = (state: GameState) => {
-      set({ handActions: [], isMyTurn: false }); // Reset action history and turn for new hand
+      // Reset action history for new hand.
+      // Don't force isMyTurn=false here — game:your-turn may have already arrived
+      // (race condition especially with 2-3 players where the first actor is self).
+      // Let setGameState handle the isMyTurn logic correctly.
+      set({ handActions: [] });
       get().setGameState(state);
       get().addLog({ key: 'log.newHand' });
     };

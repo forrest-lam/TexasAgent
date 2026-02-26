@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { ServerToClientEvents, ClientToServerEvents, PlayerAction, AIPersonality, AIEngineType, RoomConfig, ACTION_TIMEOUT } from '@texas-agent/shared';
+import { ServerToClientEvents, ClientToServerEvents, PlayerAction, AIPersonality, AIEngineType, RoomConfig, ACTION_TIMEOUT, MIN_PLAYERS } from '@texas-agent/shared';
 import * as RoomManager from './room-manager';
 import { GameController } from './game-controller';
 import { getUserById, updateUserChips, updateUserStats } from './user-store';
@@ -327,8 +327,8 @@ export function setupSocketHandlers(io: IOServer): void {
         return;
       }
 
-      if (room.players.length < 3) {
-        socket.emit('error', 'Need at least 3 players');
+      if (room.players.length < MIN_PLAYERS) {
+        socket.emit('error', `Need at least ${MIN_PLAYERS} players`);
         return;
       }
 
