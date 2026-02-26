@@ -121,25 +121,25 @@ const SEAT_POSITIONS_MOBILE: Record<number, { x: string; y: string }[]> = {
     { x: '81%', y: '65%' },
   ],
   8: [
-    { x: '44%', y: '80%' },
-    { x: '10%', y: '72%' },
-    { x: '7%', y: '40%' },
-    { x: '17%', y: '10%' },
-    { x: '44%', y: '5%' },
-    { x: '72%', y: '10%' },
-    { x: '82%', y: '40%' },
-    { x: '79%', y: '72%' },
+    { x: '44%', y: '83%' },   // 0: 自己
+    { x: '15%', y: '74%' },   // 1: 左下
+    { x: '6%',  y: '46%' },   // 2: 左
+    { x: '15%', y: '10%' },   // 3: 左上
+    { x: '50%', y: '4%'  },   // 4: 顶
+    { x: '76%', y: '10%' },   // 5: 右上
+    { x: '83%', y: '46%' },   // 6: 右
+    { x: '76%', y: '74%' },   // 7: 右下
   ],
   9: [
-    { x: '44%', y: '80%' },
-    { x: '10%', y: '75%' },
-    { x: '7%', y: '45%' },
-    { x: '13%', y: '12%' },
-    { x: '35%', y: '5%' },
-    { x: '54%', y: '5%' },
-    { x: '76%', y: '12%' },
-    { x: '82%', y: '45%' },
-    { x: '79%', y: '75%' },
+    { x: '44%', y: '83%' },   // 0: 自己，底部中央
+    { x: '15%', y: '74%' },   // 1: 左下
+    { x: '6%',  y: '52%' },   // 2: 左中
+    { x: '6%',  y: '30%' },   // 3: 左上
+    { x: '25%', y: '8%'  },   // 4: 顶左
+    { x: '50%', y: '4%'  },   // 5: 顶中
+    { x: '73%', y: '8%'  },   // 6: 顶右
+    { x: '83%', y: '30%' },   // 7: 右上
+    { x: '83%', y: '52%' },   // 8: 右中
   ],
 };
 
@@ -159,6 +159,7 @@ export default function PokerTable({ gameState, myPlayerId, isMultiplayer = fals
   }, []);
 
   const positions = getPositions(gameState.players.length, isMobile);
+  const isCompact = isMobile && gameState.players.length >= 8;
   const { t, tHand } = useI18n();
 
   // Build winner IDs set
@@ -274,6 +275,7 @@ export default function PokerTable({ gameState, myPlayerId, isMultiplayer = fals
             isWinner={winnerIds.has(player.id)}
             communityCards={gameState.communityCards}
             isMultiplayer={isMultiplayer}
+            compact={isCompact}
           />
         );
       })}

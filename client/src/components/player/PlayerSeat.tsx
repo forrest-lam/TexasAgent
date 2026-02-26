@@ -24,9 +24,10 @@ interface PlayerSeatProps {
   isWinner?: boolean;
   communityCards?: Card[];
   isMultiplayer?: boolean;
+  compact?: boolean;
 }
 
-export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, position, isWinner, communityCards = [], isMultiplayer = false }: PlayerSeatProps) {
+export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, position, isWinner, communityCards = [], isMultiplayer = false, compact = false }: PlayerSeatProps) {
   // Show cards: self always, showdown for non-folded (server controls which cards are real vs hidden)
   const showCards = isSelf || (phase === 'showdown' && !player.isFolded);
   const { t, tHand } = useI18n();
@@ -116,7 +117,7 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
 
       {/* Player info — with long press / right-click for emoji picker */}
       <div
-        className={`relative rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-[76px] sm:min-w-[100px] text-center transition-all duration-300
+        className={`relative rounded-lg sm:rounded-xl ${compact ? 'px-1.5 py-1' : 'px-2.5 py-1.5 sm:px-3 sm:py-2'} ${compact ? 'min-w-[56px]' : 'min-w-[76px] sm:min-w-[100px]'} text-center transition-all duration-300
           ${isCurrentTurn ? 'ring-2 ring-gold-400 animate-pulse-gold' : ''}
           ${isWinner ? 'ring-2 ring-gold-400 winner-glow' : ''}
           ${player.isFolded ? 'opacity-40' : ''}
@@ -144,17 +145,17 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
 
         {/* Avatar & Name */}
         <div className="flex items-center justify-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
-          <div className={`w-4 h-4 sm:w-6 sm:h-6 rounded-full flex items-center justify-center
+          <div className={`${compact ? 'w-3 h-3' : 'w-4 h-4 sm:w-6 sm:h-6'} rounded-full flex items-center justify-center
             ${player.isAI ? 'bg-purple-600/50' : 'bg-blue-600/50'}`}>
-            {player.isAI ? <Bot size={10} className="sm:w-3.5 sm:h-3.5" /> : <User size={10} className="sm:w-3.5 sm:h-3.5" />}
+            {player.isAI ? <Bot size={compact ? 8 : 10} className={compact ? '' : 'sm:w-3.5 sm:h-3.5'} /> : <User size={compact ? 8 : 10} className={compact ? '' : 'sm:w-3.5 sm:h-3.5'} />}
           </div>
-          <span className="text-[11px] sm:text-xs font-semibold text-white truncate max-w-[56px] sm:max-w-[70px]">
+          <span className={`${compact ? 'text-[9px] max-w-[44px]' : 'text-[11px] sm:text-xs max-w-[56px] sm:max-w-[70px]'} font-semibold text-white truncate`}>
             {isSelf ? t('player.you') : player.name}
           </span>
         </div>
 
         {/* Chips */}
-        <div className="text-gold-400 text-[11px] sm:text-xs font-mono font-bold">
+        <div className={`text-gold-400 ${compact ? 'text-[9px]' : 'text-[11px] sm:text-xs'} font-mono font-bold`}>
           ${formatChips(player.chips)}
         </div>
 
