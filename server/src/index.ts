@@ -184,11 +184,31 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
     return;
   }
 
-  // Resolve API key: user's server-side config → env fallback
+  // Resolve API key: user's own key → server shared key (random MiniMax/deepseek)
   const userConfig = user.llmConfig;
-  const apiKey = userConfig?.apiKey || process.env.LLM_API_KEY || '';
-  const apiBaseUrl = (userConfig?.apiBaseUrl || process.env.LLM_API_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-  const model = userConfig?.model || process.env.LLM_MODEL || 'gpt-4o-mini';
+  const hasOwnKey = !!(userConfig?.apiKey);
+  let apiKey: string;
+  let apiBaseUrl: string;
+  let model: string;
+
+  if (hasOwnKey) {
+    // User has their own key — use their config
+    apiKey = userConfig!.apiKey!;
+    apiBaseUrl = (userConfig!.apiBaseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+    model = userConfig!.model || 'gpt-4o-mini';
+  } else {
+    // No personal key — use server shared key with random MiniMax-M1-M2.5 / deepseek-v3 assignment
+    apiKey = process.env.LLM_API_KEY || '';
+    // Randomly pick MiniMax or deepseek
+    const usesMiniMax = Math.random() < 0.5;
+    if (usesMiniMax) {
+      apiBaseUrl = (process.env.LLM_API_BASE_URL_MINIMAX || 'https://api.minimaxi.chat/v1').replace(/\/$/, '');
+      model = process.env.LLM_MODEL_MINIMAX || 'MiniMax-M1';
+    } else {
+      apiBaseUrl = (process.env.LLM_API_BASE_URL_DEEPSEEK || 'https://api.deepseek.com/v1').replace(/\/$/, '');
+      model = process.env.LLM_MODEL_DEEPSEEK || 'deepseek-chat';
+    }
+  }
 
   if (!apiKey) {
     res.status(400).json({ error: 'No API key configured. Please set your LLM API key in Settings.' });

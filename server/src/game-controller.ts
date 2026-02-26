@@ -203,7 +203,7 @@ export class GameController {
     const sanitized = JSON.parse(JSON.stringify(state)) as GameState;
     for (const player of sanitized.players) {
       if (player.id !== playerId && state.phase !== 'showdown') {
-        player.cards = player.cards.map(() => ({ suit: 'spades' as const, rank: '2' as const }));
+        player.cards = [];
       }
     }
     return sanitized;
@@ -741,7 +741,7 @@ export class GameController {
       // Early win: hide everyone's cards except the requesting player's own
       for (const player of sanitized.players) {
         if (player.id !== playerId) {
-          player.cards = player.cards.map(() => ({ suit: 'spades' as const, rank: '2' as const }));
+          player.cards = [];
         }
       }
     }
