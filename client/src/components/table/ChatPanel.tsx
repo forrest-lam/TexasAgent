@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, X, Send } from 'lucide-react';
+import { MessageCircle, X, Send, Gift } from 'lucide-react';
 import { useGameStore, ChatMessage } from '../../stores/game-store';
 
 const PRESET_MESSAGES = [
@@ -14,6 +14,14 @@ const PRESET_MESSAGES = [
   'GG',
   '加油！',
   '好牌！',
+];
+
+const REACTION_EMOJIS = [
+  { emoji: '🥚', label: '扔鸡蛋' },
+  { emoji: '🍅', label: '扔番茄' },
+  { emoji: '🌹', label: '送鲜花' },
+  { emoji: '👍', label: '点赞' },
+  { emoji: '💰', label: '打赏' },
 ];
 
 const AI_RESPONSES: Record<string, string[]> = {
@@ -54,7 +62,9 @@ export default function ChatPanel({ isLocal }: ChatPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState('');
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
-  const { chatMessages, sendChatMessage, myPlayerId, gameState } = useGameStore();
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const { chatMessages, sendChatMessage, sendReaction, myPlayerId, gameState } = useGameStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -85,6 +95,14 @@ export default function ChatPanel({ isLocal }: ChatPanelProps) {
   useEffect(() => {
     if (isOpen && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 200);
+    }
+  }, [isOpen]);
+
+  // Reset reaction picker when panel closes
+  useEffect(() => {
+    if (!isOpen) {
+      setShowReactionPicker(false);
+      setSelectedTargetId(null);
     }
   }, [isOpen]);
 
@@ -124,6 +142,18 @@ export default function ChatPanel({ isLocal }: ChatPanelProps) {
     }
     setInputText('');
   };
+
+  const handleReaction = (emoji: string) => {
+    if (!selectedTargetId) return;
+    sendReaction(selectedTargetId, emoji);
+    setShowReactionPicker(false);
+    setSelectedTargetId(null);
+  };
+
+  // Other players (excluding self) for reaction targeting
+  const otherPlayers = (gameState?.players ?? []).filter(
+    p => p.id !== myPlayerId && p.isActive && !p.isFolded
+  );
 
   // ── Drag handlers ──
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -240,10 +270,89 @@ export default function ChatPanel({ isLocal }: ChatPanelProps) {
                     <span className="text-sm font-semibold text-white">聊天</span>
                     <span className="text-xs text-gray-500">{messages.length} 条</span>
                   </div>
-                  <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors cursor-pointer">
-                    <X size={14} className="text-gray-400 hover:text-white" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Reaction trigger button — only in multiplayer with other players */}
+                    {!isLocal && otherPlayers.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setShowReactionPicker(v => !v);
+                          setSelectedTargetId(null);
+                        }}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-colors cursor-pointer
+                          ${showReactionPicker
+                            ? 'bg-pink-500/20 border border-pink-500/40 text-pink-400'
+                            : 'bg-white/5 border border-white/10 text-gray-400 hover:text-pink-400 hover:border-pink-500/30'
+                          }`}
+                      >
+                        <Gift size={13} />
+                        <span>互动</span>
+                      </button>
+                    )}
+                    <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors cursor-pointer">
+                      <X size={14} className="text-gray-400 hover:text-white" />
+                    </button>
+                  </div>
                 </div>
+
+                {/* ── Reaction Picker Panel ── */}
+                <AnimatePresence>
+                  {showReactionPicker && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden border-b border-casino-border/20"
+                    >
+                      <div className="px-4 py-3 space-y-2.5 bg-black/20">
+                        {/* Step 1: Select target player */}
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-1.5">选择对象</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {otherPlayers.map(p => (
+                              <button
+                                key={p.id}
+                                onClick={() => setSelectedTargetId(p.id === selectedTargetId ? null : p.id)}
+                                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer border
+                                  ${selectedTargetId === p.id
+                                    ? 'bg-blue-500/30 border-blue-500/60 text-blue-300'
+                                    : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
+                                  }`}
+                              >
+                                {p.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Step 2: Select emoji reaction */}
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-1.5">
+                            {selectedTargetId ? '选择互动' : '先选一个人再扔～'}
+                          </p>
+                          <div className="flex gap-3">
+                            {REACTION_EMOJIS.map(({ emoji, label }) => (
+                              <button
+                                key={emoji}
+                                onClick={() => handleReaction(emoji)}
+                                disabled={!selectedTargetId}
+                                title={label}
+                                className={`flex flex-col items-center gap-0.5 transition-all cursor-pointer
+                                  ${selectedTargetId
+                                    ? 'hover:scale-125 active:scale-110'
+                                    : 'opacity-30 cursor-not-allowed'
+                                  }`}
+                              >
+                                <span className="text-2xl leading-none">{emoji}</span>
+                                <span className="text-[9px] text-gray-500">{label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div ref={scrollRef} className="h-52 overflow-y-auto px-4 py-2 space-y-1.5 scroll-smooth">
                   {messages.length === 0 ? (
                     <p className="text-xs text-gray-500 text-center py-8">暂无消息，发个消息打招呼吧！</p>
