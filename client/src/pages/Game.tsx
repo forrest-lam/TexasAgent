@@ -355,6 +355,8 @@ export default function Game() {
             isMyTurn={isMyTurn || (isLocal && gameState.players[gameState.currentPlayerIndex]?.id === 'human' && gameState.phase !== 'showdown')}
             onAction={handleAction}
             isLocal={isLocal}
+            onStandUp={!isLocal ? () => { standUp(); playSound('notify'); } : undefined}
+            isStandingUp={isStandingUp}
           />
 
           {/* Spectator "Sit Down" button */}
@@ -389,8 +391,9 @@ export default function Game() {
             </motion.div>
           )}
 
-          {/* "Stand Up" button for seated players in multiplayer — above chat toggle */}
-          {!isLocal && !isSpectator && gameState && (
+          {/* Stand Up button is now inside ActionPanel to avoid overlap with raise +/- buttons */}
+          {/* Shown outside ActionPanel only when not player's turn */}
+          {!isLocal && !isSpectator && gameState && !isMyTurn && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

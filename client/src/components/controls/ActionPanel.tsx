@@ -13,9 +13,11 @@ interface ActionPanelProps {
   isMyTurn: boolean;
   onAction: (action: PlayerAction) => void;
   isLocal?: boolean;
+  onStandUp?: () => void;
+  isStandingUp?: boolean;
 }
 
-export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction, isLocal }: ActionPanelProps) {
+export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction, isLocal, onStandUp, isStandingUp }: ActionPanelProps) {
   const [raiseAmount, setRaiseAmount] = useState(0);
   const [showRaise, setShowRaise] = useState(false);
   const { t } = useI18n();
@@ -266,6 +268,23 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
                 >
                   {t('action.raise')}
                 </Button>
+              </div>
+            )}
+            {/* Stand Up button — shown inside action panel to avoid overlap with +/- buttons */}
+            {!isLocal && onStandUp !== undefined && (
+              <div className="flex justify-end mt-1">
+                {isStandingUp ? (
+                  <span className="text-yellow-400 text-xs px-2 py-1">{t('game.standingUp')}</span>
+                ) : (
+                  <button
+                    onClick={onStandUp}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:text-yellow-400
+                      hover:border-yellow-500/30 border border-transparent transition-colors text-xs cursor-pointer"
+                  >
+                    <span>↩</span>
+                    <span>{t('game.standUp')}</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
