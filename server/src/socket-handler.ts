@@ -22,7 +22,8 @@ export function setupSocketHandlers(io: IOServer): void {
   io.on('connection', (socket: IOSocket) => {
     const userId = (socket as any).data.userId;
     const username = (socket as any).data.username;
-    console.log(`Player connected: ${username} (${socket.id})`);
+    const isGuest = (socket as any).data.isGuest === true;
+    console.log(`Player connected: ${username} (${socket.id})${isGuest ? ' [GUEST]' : ''}`);
     socketUserMap.set(socket.id, userId);
 
     // Check for reconnection — restore player to their previous room/game
@@ -69,6 +70,11 @@ export function setupSocketHandlers(io: IOServer): void {
           socketUserMap.delete(oldSocketId);
           socketUserMap.set(newSocketId, userId);
 
+          // Update owner ID if this player was the room owner
+          if (room.ownerId === oldSocketId) {
+            room.ownerId = newSocketId;
+          }
+
           // Update spectators if needed
           if (room.spectators) {
             const spec = room.spectators.find(s => s.id === oldSocketId);
@@ -101,13 +107,23 @@ export function setupSocketHandlers(io: IOServer): void {
       }
     }
 
+    // Helper: require authenticated (non-guest) user
+    const requireAuth = (eventName: string): boolean => {
+      if (isGuest) {
+        socket.emit('error', 'Login required');
+        return false;
+      }
+      return true;
+    };
+
     // Room list
     socket.on('room:list', () => {
       socket.emit('room:list', RoomManager.getRoomList());
     });
 
-    // Create room
+    // Create room (requires auth)
     socket.on('room:create', (config: RoomConfig & { name: string }) => {
+      if (!requireAuth('room:create')) return;
       const user = getUserById(userId);
       if (!user) {
         socket.emit('error', 'User not found');
@@ -121,8 +137,9 @@ export function setupSocketHandlers(io: IOServer): void {
       console.log(`[Room] Created: "${room.name}" (${room.id}) by ${username}`);
     });
 
-    // Join room
+    // Join room (requires auth)
     socket.on('room:join', (roomId: string) => {
+      if (!requireAuth('room:join')) return;
       const user = getUserById(userId);
       if (!user) {
         socket.emit('error', 'User not found');
@@ -141,13 +158,8 @@ export function setupSocketHandlers(io: IOServer): void {
       }
     });
 
-    // Spectate a room that is currently playing
+    // Spectate a room that is currently playing (guests allowed)
     socket.on('room:spectate', (roomId: string) => {
-      const user = getUserById(userId);
-      if (!user) {
-        socket.emit('error', 'User not found');
-        return;
-      }
       try {
         const room = RoomManager.spectateRoom(roomId, socket.id, username);
         socket.join(room.id);
@@ -156,7 +168,7 @@ export function setupSocketHandlers(io: IOServer): void {
         socket.emit('room:spectating', room);
         // Broadcast updated spectator list to the room
         io.to(room.id).emit('room:updated', room);
-        console.log(`[Room] ${username} spectating room "${room.name}" (${room.id})`);
+        console.log(`[Room] ${username} spectating room "${room.name}" (${room.id})${isGuest ? ' [GUEST]' : ''}`);
         // Also send current game state (sanitized — no hole cards visible)
         const controller = gameControllers.get(roomId);
         if (controller) {
@@ -170,8 +182,9 @@ export function setupSocketHandlers(io: IOServer): void {
       }
     });
 
-    // Spectator clicks "sit down" — register as pending player for next hand
+    // Spectator clicks "sit down" — register as pending player for next hand (requires auth)
     socket.on('room:sit', () => {
+      if (!requireAuth('room:sit')) return;
       const roomId = playerRooms.get(socket.id);
       if (!roomId) {
         socket.emit('error', 'Not in a room');
@@ -259,8 +272,9 @@ export function setupSocketHandlers(io: IOServer): void {
       }
     });
 
-    // Stand up — player will be removed from the game at the start of the next hand
+    // Stand up — player will be removed from the game at the start of the next hand (requires auth)
     socket.on('room:stand', () => {
+      if (!requireAuth('room:stand')) return;
       const roomId = playerRooms.get(socket.id);
       if (!roomId) {
         socket.emit('error', 'Not in a room');
@@ -279,8 +293,9 @@ export function setupSocketHandlers(io: IOServer): void {
       handleLeaveRoom(io, socket);
     });
 
-    // Add AI player
+    // Add AI player (requires auth)
     socket.on('room:add-ai', (personality: AIPersonality, engineType: AIEngineType) => {
+      if (!requireAuth('room:add-ai')) return;
       const roomId = playerRooms.get(socket.id);
       if (!roomId) {
         socket.emit('error', 'Not in a room');
@@ -291,8 +306,9 @@ export function setupSocketHandlers(io: IOServer): void {
       broadcastRoomList(io);
     });
 
-    // Start game
+    // Start game (requires auth)
     socket.on('game:start', () => {
+      if (!requireAuth('game:start')) return;
       const roomId = playerRooms.get(socket.id);
       if (!roomId) {
         socket.emit('error', 'Not in a room');
@@ -305,8 +321,14 @@ export function setupSocketHandlers(io: IOServer): void {
         return;
       }
 
-      if (room.players.length < 2) {
-        socket.emit('error', 'Need at least 2 players');
+      // Only the room owner can start the game
+      if (room.ownerId !== socket.id) {
+        socket.emit('error', 'Only the room owner can start the game');
+        return;
+      }
+
+      if (room.players.length < 3) {
+        socket.emit('error', 'Need at least 3 players');
         return;
       }
 
@@ -364,8 +386,9 @@ export function setupSocketHandlers(io: IOServer): void {
       // and resets isMyTurn to false on the client (causing 2-3 player action freeze).
     });
 
-    // Player action
+    // Player action (requires auth)
     socket.on('game:action', (action: PlayerAction) => {
+      if (!requireAuth('game:action')) return;
       const roomId = playerRooms.get(socket.id);
       if (!roomId) {
         socket.emit('error', 'Not in a room');

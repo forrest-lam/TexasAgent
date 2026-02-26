@@ -210,15 +210,15 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
         </AnimatePresence>
       </div>
 
-      {/* Bet chip */}
+      {/* Bet chip — realistic poker chip style */}
       {player.currentBet > 0 && (
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="mt-0.5 sm:mt-1 flex items-center gap-0.5 sm:gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-black/60 border border-gold-500/50 backdrop-blur-sm"
+          className="mt-0.5 sm:mt-1 flex items-center gap-0.5 sm:gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-black/60 border border-white/15 backdrop-blur-sm"
         >
-          <div className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 border border-gold-400/50 flex items-center justify-center shadow-md">
-            <span className="text-[5px] sm:text-[7px] font-bold text-black">$</span>
+          <div className="relative w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-br from-red-600 to-red-800 border-[1.5px] border-red-400 shadow-md shrink-0">
+            <div className="absolute inset-[2px] rounded-full border border-white/20" />
           </div>
           <span className="text-gold-400 text-[10px] sm:text-xs font-bold tabular-nums">
             {formatChips(player.currentBet)}

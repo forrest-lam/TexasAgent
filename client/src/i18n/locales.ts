@@ -33,6 +33,9 @@ export const locales: Record<Locale, Record<string, string>> = {
     'room.addAI': 'Add AI',
     'room.startGame': 'Start Game',
     'room.leaveRoom': 'Leave Room',
+    'room.owner': 'Room Owner',
+    'room.needMorePlayers': 'Need at least {min} players ({current} now)',
+    'room.waitingForOwner': 'Waiting for the room owner to start...',
 
     // Game
     'game.lobby': 'Lobby',
@@ -91,6 +94,8 @@ export const locales: Record<Locale, Record<string, string>> = {
     'game.standingUp': 'You will start spectating at the next hand',
     'game.waitingNextRound': 'You will join at the start of the next hand',
     'game.gameOverPlayers': 'Game Over! Not enough players.',
+    'game.loginToPlay': 'Login to join the game',
+    'game.loginRequired': 'You need to log in or register to sit down and play.',
 
     // LLM Advisor
     'advisor.title': 'AI Advisor',
@@ -157,6 +162,9 @@ export const locales: Record<Locale, Record<string, string>> = {
     'room.addAI': '添加AI',
     'room.startGame': '开始游戏',
     'room.leaveRoom': '离开房间',
+    'room.owner': '房主',
+    'room.needMorePlayers': '需要至少{min}名玩家（当前{current}人）',
+    'room.waitingForOwner': '等待房主开始游戏...',
 
     // Game
     'game.lobby': '大厅',
@@ -215,6 +223,8 @@ export const locales: Record<Locale, Record<string, string>> = {
     'game.standingUp': '你将在下一轮开始时进入观战',
     'game.waitingNextRound': '你将在下一轮开始时加入游戏',
     'game.gameOverPlayers': '游戏结束！玩家不足。',
+    'game.loginToPlay': '登录后即可参与游戏',
+    'game.loginRequired': '你需要登录或注册才能坐下参与游戏。',
 
     // LLM Advisor
     'advisor.title': 'AI 顾问',

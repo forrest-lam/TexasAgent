@@ -4,7 +4,7 @@ import { useGameStore } from '../stores/game-store';
 import { useLobbyStore } from '../stores/lobby-store';
 import { DEFAULT_ROOM_CONFIG, RoomConfig } from '@texas-agent/shared';
 import { LocalGameEngine } from '../services/local-game';
-import { getSocket } from '../services/socket-service';
+import { getSocket, connectSocket, reconnectWithToken } from '../services/socket-service';
 import PokerTable from '../components/table/PokerTable';
 import ActionPanel from '../components/controls/ActionPanel';
 import GameLog from '../components/table/GameLog';
@@ -16,7 +16,7 @@ import { ArrowLeft, RotateCcw, Armchair, LogOut, Eye } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { playSound, startBGM, stopBGM, isBGMEnabled } from '../services/sound-service';
 import { recordAction, recordHandResult, setCurrentRound } from '../services/player-memory';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../stores/auth-store';
 
 export default function Game() {
@@ -29,6 +29,10 @@ export default function Game() {
   const { t } = useI18n();
   const prevPhaseRef = useRef<string | null>(null);
   const prevRoundRef = useRef<number | null>(null);
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
+
+  const { token, user } = useAuthStore();
+  const isGuest = !token;
 
   // Track player actions for memory
   const prevLastActionRef = useRef<string | null>(null);
@@ -136,19 +140,40 @@ export default function Game() {
       setMyPlayerId('human');
       startLocalGame();
     } else {
-      const socket = getSocket();
+      // Connect socket — with token if logged in, without for guest spectating
+      const socket = connectSocket(token || undefined);
       setMyPlayerId(socket.id || '');
+
+      // Ensure lobby-store listeners are set up (needed for spectator state)
+      useLobbyStore.getState().connect();
+
       cleanupGameListeners = initGameListeners();
-      // Request current game state in case we're rejoining mid-game
-      socket.emit('game:resync');
-      socket.on('connect', () => {
+
+      // Auto-spectate the room if entering via direct link
+      const handleConnect = () => {
         setMyPlayerId(socket.id || '');
-        socket.emit('game:resync');
-      });
-      // If kicked from room (e.g. timeout), navigate back to lobby
+        if (roomId && roomId !== 'local') {
+          // Check if we're already in a room via lobby-store
+          const lobbyRoom = useLobbyStore.getState().currentRoom;
+          if (!lobbyRoom) {
+            // Direct link entry — spectate the room
+            socket.emit('room:spectate', roomId);
+          } else {
+            // Already in the room (came from lobby)
+            socket.emit('game:resync');
+          }
+        }
+      };
+
+      if (socket.connected) {
+        handleConnect();
+      }
+      socket.on('connect', handleConnect);
+
+      // If kicked from room (e.g. timeout), navigate back
       socket.on('room:left', () => {
         clearGame();
-        navigate('/');
+        navigate(isGuest ? '/login' : '/');
       });
     }
 
@@ -161,7 +186,7 @@ export default function Game() {
       socket.off('connect');
       clearGame();
     };
-  }, [roomId]);
+  }, [roomId, token]);
 
   const startLocalGame = () => {
     const userChips = useAuthStore.getState().user?.chips ?? 2000;
@@ -205,7 +230,7 @@ export default function Game() {
       useLobbyStore.getState().leaveRoom();
     }
     clearGame();
-    navigate('/');
+    navigate(isGuest ? '/login' : '/');
   };
 
   // Check if game is over
@@ -345,7 +370,14 @@ export default function Game() {
                 </p>
                 {!isSeated && (
                   <button
-                    onClick={() => { sitDown(); playSound('notify'); }}
+                    onClick={() => {
+                      if (isGuest) {
+                        setShowLoginDialog(true);
+                      } else {
+                        sitDown();
+                        playSound('notify');
+                      }
+                    }}
                     className="w-full py-3 rounded-xl bg-gold-500 text-black font-bold text-base
                       hover:bg-gold-400 transition-colors cursor-pointer flex items-center justify-center gap-2"
                   >
@@ -392,6 +424,120 @@ export default function Game() {
           </div>
         </div>
       )}
+
+      {/* Login Dialog for guest spectators wanting to sit down */}
+      <AnimatePresence>
+        {showLoginDialog && (
+          <LoginDialog
+            onClose={() => setShowLoginDialog(false)}
+            onSuccess={() => {
+              setShowLoginDialog(false);
+              // After login, reconnect socket with token, then re-spectate and sit down
+              const newToken = useAuthStore.getState().token;
+              if (newToken && roomId) {
+                const newSocket = reconnectWithToken(newToken);
+                // Re-setup listeners on new socket
+                const cleanup = initGameListeners();
+                newSocket.on('connect', () => {
+                  setMyPlayerId(newSocket.id || '');
+                  // Re-spectate and then sit
+                  newSocket.emit('room:spectate', roomId);
+                  newSocket.once('room:spectating', () => {
+                    newSocket.emit('room:sit');
+                  });
+                });
+                // Cleanup old listeners handled by effect deps change (token changed)
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+/** Inline login/register dialog for guest spectators */
+function LoginDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { login, register, isLoading, error, clearError } = useAuthStore();
+  const { t } = useI18n();
+  const [isRegister, setIsRegister] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const success = isRegister
+      ? await register(username, password)
+      : await login(username, password);
+    if (success) onSuccess();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-casino-card border border-casino-border rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="text-center">
+          <h2 className="text-lg font-bold text-white">{t('game.loginToPlay')}</h2>
+          <p className="text-xs text-gray-400 mt-1">{t('game.loginRequired')}</p>
+        </div>
+
+        {error && (
+          <div className="bg-red-500/20 border border-red-500/40 rounded-lg p-2 text-red-300 text-xs text-center">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs text-gray-300 mb-1">{t('auth.username')}</label>
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              className="w-full px-3 py-2 bg-casino-bg border border-casino-border rounded-lg text-white text-sm focus:outline-none focus:border-gold-500"
+              required
+              minLength={2}
+              maxLength={20}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-300 mb-1">{t('auth.password')}</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="w-full px-3 py-2 bg-casino-bg border border-casino-border rounded-lg text-white text-sm focus:outline-none focus:border-gold-500"
+              required
+              minLength={4}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-2.5 bg-gold-500 hover:bg-gold-400 disabled:opacity-50 text-black font-bold rounded-lg transition-colors cursor-pointer"
+          >
+            {isLoading ? '...' : isRegister ? t('auth.register') : t('auth.login')}
+          </button>
+          <p className="text-center text-xs text-gray-400">
+            {isRegister ? t('auth.hasAccount') : t('auth.noAccount')}{' '}
+            <button type="button" onClick={() => { setIsRegister(!isRegister); clearError(); }} className="text-gold-400 hover:underline">
+              {isRegister ? t('auth.login') : t('auth.register')}
+            </button>
+          </p>
+        </form>
+      </motion.div>
+    </motion.div>
   );
 }

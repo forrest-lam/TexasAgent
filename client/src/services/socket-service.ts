@@ -14,7 +14,7 @@ export function getSocket(token?: string): AppSocket {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      auth: token ? { token } : undefined,
+      auth: token ? { token } : {},
     });
   }
   return socket;
@@ -30,6 +30,26 @@ export function connectSocket(token?: string): AppSocket {
     s.connect();
   }
   return s;
+}
+
+/** Reconnect with a new token (e.g. after guest logs in) */
+export function reconnectWithToken(token: string): AppSocket {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+  // Notify listeners they need to re-attach (lobby-store etc.)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('socket-reconnect'));
+  }
+  socket = io(SERVER_URL, {
+    autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    auth: { token },
+  });
+  return socket;
 }
 
 export function disconnectSocket(): void {

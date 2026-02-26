@@ -9,12 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { motion } from 'framer-motion';
-import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff, Settings, LogOut, Coins, Trophy } from 'lucide-react';
+import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff, Settings, LogOut, Coins, Trophy, Crown } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { LanguageSwitch } from '../components/controls/LanguageSwitch';
 import SoundToggle from '../components/controls/SoundToggle';
 import { playSound } from '../services/sound-service';
 import { useAuthStore } from '../stores/auth-store';
+import { getSocket } from '../services/socket-service';
 
 export default function Lobby() {
   const navigate = useNavigate();
@@ -72,6 +73,7 @@ export default function Lobby() {
       }}
       onStart={startGame}
       onLeave={useLobbyStore.getState().leaveRoom}
+      isOwner={currentRoom.ownerId === getSocket().id}
     />;
   }
 
@@ -307,10 +309,12 @@ export default function Lobby() {
   );
 }
 
-function RoomWaitingScreen({ room, onAddAI, onStart, onLeave }: {
-  room: any; onAddAI: () => void; onStart: () => void; onLeave: () => void;
+function RoomWaitingScreen({ room, onAddAI, onStart, onLeave, isOwner }: {
+  room: any; onAddAI: () => void; onStart: () => void; onLeave: () => void; isOwner: boolean;
 }) {
   const { t } = useI18n();
+  const minPlayers = 2;
+  const canStart = isOwner && room.players.length >= minPlayers;
   return (
     <div className="min-h-screen bg-casino-bg flex flex-col items-center justify-center px-3 sm:px-4">
       <div className="glass-card rounded-2xl p-5 sm:p-8 max-w-lg w-full space-y-4 sm:space-y-6">
@@ -324,22 +328,37 @@ function RoomWaitingScreen({ room, onAddAI, onStart, onLeave }: {
             <div key={p.id} className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white/5">
               {p.isAI ? <Bot size={16} className="text-purple-400" /> : <Users size={16} className="text-blue-400" />}
               <span className="text-sm text-white font-medium">{p.name}</span>
+              {p.id === room.ownerId && <Crown size={14} className="text-gold-400 ml-auto" title={t('room.owner')} />}
               {p.isAI && <span className="text-xs text-gray-500 ml-auto">{p.aiPersonality}</span>}
             </div>
           ))}
         </div>
 
+        {/* Status message */}
+        {room.players.length < minPlayers && (
+          <p className="text-center text-yellow-400/80 text-xs">
+            {t('room.needMorePlayers', { current: room.players.length, min: minPlayers })}
+          </p>
+        )}
+        {!isOwner && room.players.length >= minPlayers && (
+          <p className="text-center text-gray-500 text-xs">{t('room.waitingForOwner')}</p>
+        )}
+
         <div className="flex gap-3">
-          <Button onClick={onAddAI} variant="outline"
-            disabled={room.players.length >= room.config.maxPlayers}
-            className="flex-1 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 cursor-pointer disabled:opacity-50">
-            <Bot size={14} className="mr-2" /> {t('room.addAI')}
-          </Button>
-          <Button onClick={onStart}
-            disabled={room.players.length < 2}
-            className="flex-1 bg-gold-500 text-black hover:bg-gold-400 font-bold cursor-pointer disabled:opacity-50">
-            {t('room.startGame')}
-          </Button>
+          {isOwner && (
+            <Button onClick={onAddAI} variant="outline"
+              disabled={room.players.length >= room.config.maxPlayers}
+              className="flex-1 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 cursor-pointer disabled:opacity-50">
+              <Bot size={14} className="mr-2" /> {t('room.addAI')}
+            </Button>
+          )}
+          {isOwner && (
+            <Button onClick={onStart}
+              disabled={!canStart}
+              className="flex-1 bg-gold-500 text-black hover:bg-gold-400 font-bold cursor-pointer disabled:opacity-50">
+              {t('room.startGame')}
+            </Button>
+          )}
         </div>
         <Button onClick={onLeave} variant="ghost" className="w-full text-gray-400 hover:text-white cursor-pointer">
           {t('room.leaveRoom')}

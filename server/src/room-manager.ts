@@ -28,6 +28,7 @@ export function createRoom(name: string, config: RoomConfig, creatorId: string, 
       seatIndex: 0,
     }],
     status: 'waiting',
+    ownerId: creatorId,
     createdAt: Date.now(),
   };
 
@@ -67,9 +68,7 @@ export function spectateRoom(roomId: string, playerId: string, playerName: strin
   if (room.players.find(p => p.id === playerId)) throw new Error('Already in room');
   // Also check pending players
   if (room.pendingPlayers?.find(p => p.id === playerId)) throw new Error('Already waiting to join');
-  const totalCount = room.players.length + (room.pendingPlayers?.length ?? 0);
-  if (totalCount >= room.config.maxPlayers) throw new Error('Room is full');
-  // Track spectator
+  // Track spectator (spectators don't count against maxPlayers)
   if (!room.spectators) room.spectators = [];
   if (!room.spectators.find(s => s.id === playerId)) {
     room.spectators.push({ id: playerId, name: playerName });

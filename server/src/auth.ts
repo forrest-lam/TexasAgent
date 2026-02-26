@@ -41,10 +41,15 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
 }
 
 // Socket.IO middleware — extract user from token in auth handshake
+// Allows anonymous (guest) connections for spectating; authenticated for playing
 export function socketAuthMiddleware(socket: any, next: (err?: Error) => void) {
   const token = socket.handshake.auth?.token;
   if (!token) {
-    return next(new Error('Authentication required'));
+    // Allow anonymous connection as guest (spectate-only)
+    socket.data.userId = `guest-${socket.id}`;
+    socket.data.username = `Guest_${socket.id.slice(0, 6)}`;
+    socket.data.isGuest = true;
+    return next();
   }
 
   const payload = verifyToken(token);
@@ -54,5 +59,6 @@ export function socketAuthMiddleware(socket: any, next: (err?: Error) => void) {
 
   socket.data.userId = payload.userId;
   socket.data.username = payload.username;
+  socket.data.isGuest = false;
   next();
 }

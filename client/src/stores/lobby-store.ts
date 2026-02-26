@@ -3,6 +3,15 @@ import { Room, RoomConfig } from '@texas-agent/shared';
 import { getSocket, connectSocket } from '../services/socket-service';
 import { useAuthStore } from './auth-store';
 
+let listenersAttached = false;
+
+// Reset listeners flag when socket is recreated (e.g. after guest login)
+if (typeof window !== 'undefined') {
+  window.addEventListener('socket-reconnect', () => {
+    listenersAttached = false;
+  });
+}
+
 interface LobbyState {
   rooms: Room[];
   currentRoom: Room | null;
@@ -33,6 +42,10 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   connect: () => {
     const token = useAuthStore.getState().token;
     const socket = connectSocket(token || undefined);
+
+    // Prevent double-attaching listeners
+    if (listenersAttached) return;
+    listenersAttached = true;
 
     socket.on('connect', () => {
       set({ isConnected: true });

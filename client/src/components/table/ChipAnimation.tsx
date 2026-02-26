@@ -78,8 +78,14 @@ export default function ChipAnimation({ winners, triggerKey }: ChipAnimationProp
           }}
           exit={{ opacity: 0, scale: 0 }}
         >
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gold-400 via-yellow-400 to-gold-600 border-2 border-gold-300 shadow-[0_0_12px_rgba(212,175,55,0.6)] flex items-center justify-center">
-            <span className="text-[8px] font-black text-amber-900">$</span>
+          {/* Realistic poker chip token */}
+          <div className={`w-7 h-7 rounded-full border-2 shadow-[0_0_12px_rgba(255,255,255,0.2)]
+            ${['bg-gradient-to-br from-red-600 to-red-800 border-red-400',
+               'bg-gradient-to-br from-blue-600 to-blue-800 border-blue-400',
+               'bg-gradient-to-br from-green-600 to-green-800 border-green-400'][Math.floor(Math.random() * 3)]}`}
+          >
+            <div className="absolute inset-[3px] rounded-full border border-white/25" />
+            <div className="absolute inset-[5px] rounded-full border border-dashed border-white/15" />
           </div>
         </motion.div>
       ))}

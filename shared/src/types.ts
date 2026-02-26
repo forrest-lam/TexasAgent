@@ -85,6 +85,8 @@ export interface Room {
   spectators?: Spectator[];
   gameState?: GameState;
   status: 'waiting' | 'playing';
+  /** Socket ID of the room creator (room owner) */
+  ownerId: string;
   createdAt: number;
 }
 
