@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, X, Send, ChevronUp } from 'lucide-react';
+import { MessageCircle, X, Send } from 'lucide-react';
 import { useGameStore, ChatMessage } from '../../stores/game-store';
 
 const PRESET_MESSAGES = [
@@ -118,9 +118,8 @@ export default function ChatPanel({ isLocal }: ChatPanelProps) {
 
   return (
     <>
-      {/* ── Mini chat bar: always visible at bottom-left ── */}
-      <div className="fixed bottom-[7.5rem] sm:bottom-36 left-2 sm:left-4 z-30 max-w-[260px] sm:max-w-[300px]">
-        {/* Recent messages floating up */}
+      {/* ── Recent messages: float just above the chat toggle button ── */}
+      <div className="fixed bottom-[3.5rem] sm:bottom-[4.5rem] left-2 sm:left-3 z-30 max-w-[220px] sm:max-w-[260px] pointer-events-none">
         <AnimatePresence mode="popLayout">
           {!isOpen && recentMessages.map((msg, i) => {
             const isSelf = msg.playerId === myPlayerId || (isLocal && msg.playerId === 'human');
@@ -133,29 +132,31 @@ export default function ChatPanel({ isLocal }: ChatPanelProps) {
                 transition={{ duration: 0.25 }}
                 className="mb-1"
               >
-                <div className="inline-flex items-baseline gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/60 backdrop-blur-sm border border-white/5 max-w-full">
+                <div className="inline-flex items-baseline gap-1.5 px-2 py-1 rounded-xl bg-black/70 backdrop-blur-sm border border-white/5 max-w-full">
                   <span className={`text-[10px] font-medium shrink-0 ${isSelf ? 'text-blue-400' : 'text-amber-400'}`}>
                     {isSelf ? '你' : msg.playerName}
                   </span>
-                  <span className="text-xs text-gray-200 break-words line-clamp-1">{msg.message}</span>
+                  <span className="text-[11px] text-gray-200 break-words line-clamp-1">{msg.message}</span>
                 </div>
               </motion.div>
             );
           })}
         </AnimatePresence>
-
-        {/* Toggle / quick input bar */}
-        <motion.button
-          onClick={() => setIsOpen(true)}
-          whileTap={{ scale: 0.97 }}
-          className="mt-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-casino-card/80 border border-casino-border/50
-            backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:border-blue-500/30 transition-all cursor-pointer shadow-lg"
-        >
-          <MessageCircle size={14} />
-          <span className="text-xs text-gray-500">点击聊天...</span>
-          <ChevronUp size={12} className="ml-auto text-gray-600" />
-        </motion.button>
       </div>
+
+      {/* ── Chat toggle button: compact icon at bottom-left, same row as ActionPanel ── */}
+      <motion.button
+        onClick={() => setIsOpen(true)}
+        whileTap={{ scale: 0.95 }}
+        className="fixed bottom-1.5 sm:bottom-3 left-2 sm:left-3 z-50 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl
+          bg-casino-card/80 border border-casino-border/50 backdrop-blur-sm
+          text-gray-400 hover:text-blue-400 hover:border-blue-500/30 transition-all cursor-pointer shadow-lg"
+      >
+        <MessageCircle size={14} />
+        {messages.length > 0 && (
+          <span className="text-[10px] text-gray-500">{messages.length}</span>
+        )}
+      </motion.button>
 
       {/* ── Expanded chat panel (overlay) ── */}
       <AnimatePresence>
