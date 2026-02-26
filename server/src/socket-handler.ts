@@ -8,6 +8,9 @@ type IOServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type IOSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const gameControllers = new Map<string, GameController>();
+// Rate limiting for chat: Map<socketId, lastMessageTime>
+const chatRateLimit = new Map<string, number>();
+const CHAT_RATE_LIMIT_MS = 5000; // 5 seconds between messages
 const playerRooms = new Map<string, string>();
 // Map socket.id → userId for chip settlement
 const socketUserMap = new Map<string, string>();
@@ -398,6 +401,58 @@ export function setupSocketHandlers(io: IOServer): void {
       }
     });
 
+    // Chat message
+    socket.on('chat:message', (message: string) => {
+      const roomId = playerRooms.get(socket.id);
+      if (!roomId) return;
+
+      // Validate message
+      if (!message || typeof message !== 'string') return;
+      const trimmed = message.trim().slice(0, 50);
+      if (!trimmed) return;
+
+      // Rate limit check
+      const lastTime = chatRateLimit.get(socket.id) || 0;
+      const now = Date.now();
+      if (now - lastTime < CHAT_RATE_LIMIT_MS) return;
+      chatRateLimit.set(socket.id, now);
+
+      // Broadcast to all in room
+      io.to(roomId).emit('chat:message', {
+        playerId: socket.id,
+        playerName: username,
+        message: trimmed,
+        timestamp: now,
+      });
+    });
+
+    // Reaction (throw tomato/egg/flower etc.)
+    socket.on('room:send-reaction', (toId: string, emoji: string) => {
+      const roomId = playerRooms.get(socket.id);
+      if (!roomId) return;
+
+      // Can't react to yourself
+      if (toId === socket.id) return;
+
+      // Validate emoji is in the allowed set
+      const allowedEmojis = ['🍅', '🥚', '🌹', '👍', '💰'];
+      if (!allowedEmojis.includes(emoji)) return;
+
+      // Find target player name
+      const room = RoomManager.getRoom(roomId);
+      const targetPlayer = room?.players.find(p => p.id === toId);
+      const toName = targetPlayer?.name || 'Unknown';
+
+      // Broadcast reaction to entire room
+      io.to(roomId).emit('room:reaction', {
+        fromId: socket.id,
+        fromName: username,
+        toId,
+        toName,
+        emoji,
+      });
+    });
+
     // Disconnect
     socket.on('disconnect', () => {
       console.log(`Player disconnected: ${username} (${socket.id})`);
@@ -438,6 +493,7 @@ export function setupSocketHandlers(io: IOServer): void {
       
       handleLeaveRoom(io, socket);
       socketUserMap.delete(socket.id);
+      chatRateLimit.delete(socket.id);
     });
   });
 }

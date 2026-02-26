@@ -11,6 +11,7 @@ import GameLog from '../components/table/GameLog';
 import { LanguageSwitch } from '../components/controls/LanguageSwitch';
 import SoundToggle from '../components/controls/SoundToggle';
 import LLMAdvisor from '../components/controls/LLMAdvisor';
+import ChatPanel from '../components/table/ChatPanel';
 import { ArrowLeft, RotateCcw, Armchair, LogOut, Eye } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { playSound, startBGM, stopBGM, isBGMEnabled } from '../services/sound-service';
@@ -273,7 +274,7 @@ export default function Game() {
       {gameState ? (
         <>
           <div className="w-full h-full pt-10 pb-2 px-2 sm:p-4">
-            <PokerTable gameState={gameState} myPlayerId={myPlayerId} />
+            <PokerTable gameState={gameState} myPlayerId={myPlayerId} isMultiplayer={!isLocal} />
           </div>
 
           {/* Game Over overlay */}
@@ -318,6 +319,9 @@ export default function Game() {
             isMyTurn={isMyTurn || (isLocal && gameState.players[gameState.currentPlayerIndex]?.id === 'human' && gameState.phase !== 'showdown')}
             onAction={handleAction}
           />
+
+          {/* Chat panel — multiplayer only */}
+          {!isLocal && <ChatPanel />}
 
           {/* Action panel */}
           <ActionPanel

@@ -47,6 +47,21 @@ app.use(express.json());
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
+// Leaderboard
+app.get('/api/leaderboard', (_req, res) => {
+  const allUsers = getAllUsers();
+  const leaderboard = allUsers
+    .sort((a, b) => b.chips - a.chips)
+    .slice(0, 20)
+    .map(u => ({
+      username: u.username,
+      chips: u.chips,
+      gamesWon: u.stats.gamesWon,
+      gamesPlayed: u.stats.gamesPlayed,
+    }));
+  res.json({ leaderboard });
+});
+
 
 // --- Auth routes ---
 

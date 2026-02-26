@@ -9,6 +9,24 @@ export interface LogEntry {
   params?: Record<string, string | number>;
 }
 
+/** Chat message in multiplayer mode */
+export interface ChatMessage {
+  playerId: string;
+  playerName: string;
+  message: string;
+  timestamp: number;
+}
+
+/** Reaction event (tomato/egg/flower etc.) */
+export interface ReactionEvent {
+  fromId: string;
+  fromName: string;
+  toId: string;
+  toName: string;
+  emoji: string;
+  id: number; // unique id for animation key
+}
+
 /** A single action in the current hand's action history */
 export interface HandAction {
   playerName: string;
@@ -25,11 +43,20 @@ interface GameStore {
   gameLog: LogEntry[];
   /** Structured action history for the current hand (reset each new hand) */
   handActions: HandAction[];
+  /** Chat messages in multiplayer mode (last 20) */
+  chatMessages: ChatMessage[];
+  /** Active reaction animations */
+  reactions: ReactionEvent[];
   setGameState: (state: GameState) => void;
   setMyPlayerId: (id: string) => void;
   sendAction: (action: PlayerAction) => void;
   addLog: (entry: LogEntry) => void;
   addHandAction: (action: HandAction) => void;
+  addChatMessage: (msg: ChatMessage) => void;
+  sendChatMessage: (message: string) => void;
+  sendReaction: (toId: string, emoji: string) => void;
+  addReaction: (reaction: Omit<ReactionEvent, 'id'>) => void;
+  removeReaction: (id: number) => void;
   clearGame: () => void;
   /** Register socket listeners; returns a cleanup function to remove them */
   initGameListeners: () => (() => void);
@@ -42,6 +69,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   myPlayerId: '',
   gameLog: [],
   handActions: [],
+  chatMessages: [],
+  reactions: [],
 
   setGameState: (state: GameState) => {
     const myId = get().myPlayerId;
@@ -73,11 +102,40 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set(s => ({ handActions: [...s.handActions, action] }));
   },
 
+  addChatMessage: (msg: ChatMessage) => {
+    set(s => ({ chatMessages: [...s.chatMessages.slice(-19), msg] }));
+  },
+
+  sendChatMessage: (message: string) => {
+    const socket = getSocket();
+    socket.emit('chat:message', message);
+  },
+
+  sendReaction: (toId: string, emoji: string) => {
+    const socket = getSocket();
+    socket.emit('room:send-reaction', toId, emoji);
+  },
+
+  addReaction: (reaction: Omit<ReactionEvent, 'id'>) => {
+    const id = Date.now() + Math.random();
+    set(s => ({ reactions: [...s.reactions, { ...reaction, id }] }));
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+      set(s => ({ reactions: s.reactions.filter(r => r.id !== id) }));
+    }, 3000);
+  },
+
+  removeReaction: (id: number) => {
+    set(s => ({ reactions: s.reactions.filter(r => r.id !== id) }));
+  },
+
   clearGame: () => set({
     gameState: null,
     isMyTurn: false,
     gameLog: [],
     handActions: [],
+    chatMessages: [],
+  reactions: [],
   }),
 
   initGameListeners: () => {
@@ -140,6 +198,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     socket.on('game:ended', onEnded);
     socket.on('game:your-turn', onYourTurn);
 
+    const onChatMessage = (data: ChatMessage) => {
+      get().addChatMessage(data);
+    };
+    socket.on('chat:message', onChatMessage);
+
+    const onReaction = (data: Omit<ReactionEvent, 'id'>) => {
+      get().addReaction(data);
+    };
+    socket.on('room:reaction', onReaction);
+
     // Return cleanup function to remove listeners
     return () => {
       socket.off('game:started', onStarted);
@@ -147,6 +215,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       socket.off('game:action', onAction);
       socket.off('game:ended', onEnded);
       socket.off('game:your-turn', onYourTurn);
+      socket.off('chat:message', onChatMessage);
+      socket.off('room:reaction', onReaction);
     };
   },
 }));

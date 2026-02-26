@@ -1,10 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useRef, useCallback } from 'react';
 import { Player, Card, GamePhase, evaluateHand } from '@texas-agent/shared';
 import { formatChips } from '@texas-agent/shared';
 import PokerCard from '../table/PokerCard';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, User, Crown } from 'lucide-react';
 import { useI18n } from '../../i18n';
+import { useGameStore } from '../../stores/game-store';
+
+const REACTION_EMOJIS = [
+  { emoji: '🍅', label: '番茄' },
+  { emoji: '🥚', label: '鸡蛋' },
+  { emoji: '🌹', label: '鲜花' },
+  { emoji: '👍', label: '点赞' },
+  { emoji: '💰', label: '打赏' },
+];
 
 interface PlayerSeatProps {
   player: Player;
@@ -14,12 +23,17 @@ interface PlayerSeatProps {
   position: { x: string; y: string };
   isWinner?: boolean;
   communityCards?: Card[];
+  isMultiplayer?: boolean;
 }
 
-export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, position, isWinner, communityCards = [] }: PlayerSeatProps) {
+export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, position, isWinner, communityCards = [], isMultiplayer = false }: PlayerSeatProps) {
   // Show cards: self always, showdown for non-folded (server controls which cards are real vs hidden)
   const showCards = isSelf || (phase === 'showdown' && !player.isFolded);
   const { t, tHand } = useI18n();
+
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { sendReaction, myPlayerId } = useGameStore();
 
   // Evaluate best hand for players whose cards are visible and community cards exist
   const bestHand = useMemo(() => {
@@ -36,6 +50,31 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
       return null;
     }
   }, [showCards, player.cards, player.isFolded, communityCards]);
+
+  const handleLongPressStart = useCallback(() => {
+    if (!isMultiplayer || isSelf) return;
+    longPressTimer.current = setTimeout(() => {
+      setShowEmojiPicker(true);
+    }, 600);
+  }, [isMultiplayer, isSelf]);
+
+  const handleLongPressEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (!isMultiplayer || isSelf) return;
+    e.preventDefault();
+    setShowEmojiPicker(true);
+  }, [isMultiplayer, isSelf]);
+
+  const handleSendReaction = (emoji: string) => {
+    sendReaction(player.id, emoji);
+    setShowEmojiPicker(false);
+  };
 
   return (
     <motion.div
@@ -75,13 +114,20 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
         ) : null}
       </div>
 
-      {/* Player info */}
+      {/* Player info — with long press / right-click for emoji picker */}
       <div
         className={`relative rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 min-w-[76px] sm:min-w-[100px] text-center transition-all duration-300
           ${isCurrentTurn ? 'ring-2 ring-gold-400 animate-pulse-gold' : ''}
           ${isWinner ? 'ring-2 ring-gold-400 winner-glow' : ''}
           ${player.isFolded ? 'opacity-40' : ''}
-          bg-casino-card/90 backdrop-blur-sm border border-casino-border/50`}
+          bg-casino-card/90 backdrop-blur-sm border border-casino-border/50
+          ${isMultiplayer && !isSelf ? 'cursor-pointer select-none' : ''}`}
+        onMouseDown={handleLongPressStart}
+        onMouseUp={handleLongPressEnd}
+        onMouseLeave={handleLongPressEnd}
+        onTouchStart={handleLongPressStart}
+        onTouchEnd={handleLongPressEnd}
+        onContextMenu={handleContextMenu}
       >
         {/* Role badges */}
         <div className="absolute -top-2 left-1/2 -translate-x-1/2 flex gap-0.5 sm:gap-1">
@@ -127,6 +173,40 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
             </span>
           </div>
         )}
+
+        {/* Emoji picker popup */}
+        <AnimatePresence>
+          {showEmojiPicker && (
+            <>
+              {/* Backdrop to close picker */}
+              <div
+                className="fixed inset-0 z-[60]"
+                onClick={() => setShowEmojiPicker(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                className="absolute -top-14 left-1/2 -translate-x-1/2 z-[61]
+                  bg-casino-card/98 border border-casino-border/60 rounded-xl px-2 py-1.5
+                  flex gap-1.5 shadow-2xl backdrop-blur-md"
+                onClick={e => e.stopPropagation()}
+              >
+                {REACTION_EMOJIS.map(({ emoji, label }) => (
+                  <button
+                    key={emoji}
+                    onClick={() => handleSendReaction(emoji)}
+                    title={label}
+                    className="text-xl sm:text-2xl hover:scale-125 transition-transform cursor-pointer leading-none p-0.5"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Bet chip */}

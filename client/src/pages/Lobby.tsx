@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { motion } from 'framer-motion';
-import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff, Settings, LogOut, Coins } from 'lucide-react';
+import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff, Settings, LogOut, Coins, Trophy } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { LanguageSwitch } from '../components/controls/LanguageSwitch';
 import SoundToggle from '../components/controls/SoundToggle';
@@ -25,8 +25,23 @@ export default function Lobby() {
   const [showCreate, setShowCreate] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [config, setConfig] = useState<RoomConfig>({ ...DEFAULT_ROOM_CONFIG });
+  const [leaderboard, setLeaderboard] = useState<Array<{username: string; chips: number; gamesWon: number; gamesPlayed: number}>>([]);
 
   useEffect(() => { connect(); }, []);
+
+  const fetchLeaderboard = () => {
+    const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : `http://${window.location.hostname}:3001`);
+    fetch(`${API_BASE}/api/leaderboard`)
+      .then(r => r.json())
+      .then(data => { if (data.leaderboard) setLeaderboard(data.leaderboard); })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchLeaderboard();
+    const interval = setInterval(fetchLeaderboard, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (currentRoom?.status === 'playing') {
@@ -190,6 +205,35 @@ export default function Lobby() {
                   </div>
                 </motion.div>
               ))}
+            </div>
+          </div>
+        )}
+      {/* Leaderboard */}
+        {leaderboard.length > 0 && (
+          <div className="space-y-4 mt-8">
+            <div className="flex items-center gap-2">
+              <Trophy size={18} className="text-gold-400" />
+              <h3 className="text-lg font-semibold text-white">排行榜</h3>
+            </div>
+            <div className="glass-card rounded-2xl overflow-hidden">
+              <div className="grid grid-cols-4 gap-2 px-4 py-2 text-xs text-gray-500 border-b border-casino-border/30">
+                <span>排名</span>
+                <span>玩家</span>
+                <span className="text-right">筹码</span>
+                <span className="text-right">胜率</span>
+              </div>
+              {leaderboard.slice(0, 10).map((entry, index) => {
+                const medal = index === 0 ? '🏆' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`;
+                const winRate = entry.gamesPlayed > 0 ? Math.round(entry.gamesWon / entry.gamesPlayed * 100) : 0;
+                return (
+                  <div key={entry.username} className={`grid grid-cols-4 gap-2 px-4 py-2.5 text-sm items-center border-b border-casino-border/10 last:border-0 ${index < 3 ? 'bg-gold-500/5' : ''}`}>
+                    <span className="font-bold text-base">{medal}</span>
+                    <span className="text-white font-medium truncate">{entry.username}</span>
+                    <span className="text-gold-400 font-mono text-right">${entry.chips.toLocaleString()}</span>
+                    <span className="text-gray-400 text-right">{winRate}%</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

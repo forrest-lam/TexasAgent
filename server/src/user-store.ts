@@ -124,3 +124,7 @@ function toProfile(u: StoredUser): UserProfile {
   const { passwordHash, ...profile } = u;
   return profile;
 }
+
+export function getAllUsers(): UserProfile[] {
+  return Array.from(users.values()).map(toProfile);
+}

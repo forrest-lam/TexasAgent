@@ -175,6 +175,8 @@ export interface ServerToClientEvents {
   'game:your-turn': (data: { timeLimit: number }) => void;
   'user:updated': (user: AuthResponse['user']) => void;
   'error': (message: string) => void;
+  'chat:message': (data: { playerId: string; playerName: string; message: string; timestamp: number }) => void;
+  'room:reaction': (data: { fromId: string; fromName: string; toId: string; toName: string; emoji: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -189,4 +191,6 @@ export interface ClientToServerEvents {
   'game:start': () => void;
   'game:action': (action: PlayerAction) => void;
   'game:resync': () => void;
+  'chat:message': (message: string) => void;
+  'room:send-reaction': (toId: string, emoji: string) => void;
 }

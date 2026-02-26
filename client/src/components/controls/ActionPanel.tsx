@@ -101,10 +101,10 @@ export default function ActionPanel({ gameState, myPlayerId, isMyTurn, onAction,
   // Quick raise presets: pot multipliers
   const quickRaises = [
     { label: t('action.minRaise'), amount: minRaise },
-    { label: '½ Pot', amount: snapToBB(Math.floor(gameState.pot / 2) + player.currentBet) },
-    { label: '¾ Pot', amount: snapToBB(Math.floor(gameState.pot * 0.75) + player.currentBet) },
-    { label: '1x Pot', amount: snapToBB(gameState.pot + player.currentBet) },
-    { label: '2x Pot', amount: snapToBB(gameState.pot * 2 + player.currentBet) },
+    { label: t('action.halfPot'), amount: snapToBB(Math.floor(gameState.pot / 2) + player.currentBet) },
+    { label: t('action.threeFourPot'), amount: snapToBB(Math.floor(gameState.pot * 0.75) + player.currentBet) },
+    { label: t('action.onePot'), amount: snapToBB(gameState.pot + player.currentBet) },
+    { label: t('action.twoPot'), amount: snapToBB(gameState.pot * 2 + player.currentBet) },
   ].filter(b => b.amount >= minRaise && b.amount <= maxRaise)
    // Remove duplicates (by amount)
    .filter((item, index, self) => self.findIndex(x => x.amount === item.amount) === index);

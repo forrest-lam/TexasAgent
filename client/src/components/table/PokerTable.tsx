@@ -1,4 +1,6 @@
 import { useRef, useMemo, useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useGameStore } from '../../stores/game-store';
 import { GameState } from '@texas-agent/shared';
 import CommunityCards from './CommunityCards';
 import Pot from './Pot';
@@ -10,6 +12,7 @@ import { useI18n } from '../../i18n';
 interface PokerTableProps {
   gameState: GameState;
   myPlayerId: string;
+  isMultiplayer?: boolean;
 }
 
 // Desktop seat positions — used on sm+ screens
@@ -145,9 +148,10 @@ function getPositions(count: number, isMobile: boolean) {
   return positions[Math.min(Math.max(count, 2), 9)] || positions[6];
 }
 
-export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
+export default function PokerTable({ gameState, myPlayerId, isMultiplayer = false }: PokerTableProps) {
   // Detect mobile (< 640px, matching Tailwind's sm breakpoint)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  const { reactions } = useGameStore();
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 640);
     window.addEventListener('resize', onResize);
@@ -269,6 +273,7 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
             position={pos}
             isWinner={winnerIds.has(player.id)}
             communityCards={gameState.communityCards}
+            isMultiplayer={isMultiplayer}
           />
         );
       })}
@@ -285,6 +290,32 @@ export default function PokerTable({ gameState, myPlayerId }: PokerTableProps) {
         position={raiseEffect?.position ?? null}
         isAllIn={raiseEffect?.isAllIn}
       />
+
+      {/* Reaction floating animations */}
+      <AnimatePresence>
+        {reactions.map(reaction => {
+          // Find the target player position
+          const orderIdx = ordered.findIndex(p => p.id === reaction.toId);
+          const targetPos = positions[orderIdx] || { x: '50%', y: '50%' };
+          return (
+            <motion.div
+              key={reaction.id}
+              className="absolute z-50 pointer-events-none text-3xl sm:text-4xl"
+              style={{
+                left: targetPos.x,
+                top: targetPos.y,
+                transform: 'translate(-50%, -50%)',
+              }}
+              initial={{ opacity: 0, scale: 0.5, y: 0 }}
+              animate={{ opacity: 1, scale: 1.5, y: -60 }}
+              exit={{ opacity: 0, scale: 0.8, y: -100 }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+            >
+              {reaction.emoji}
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }

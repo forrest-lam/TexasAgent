@@ -69,9 +69,27 @@ export class RuleBasedStrategy implements AIStrategy {
     const shouldBluff = Math.random() < this.params.bluffFrequency;
     const callRatio = callAmount / context.playerChips; // what fraction of stack is the call
 
+    // === Optimization 2: Prevent infinite re-raise loops ===
+    // If pot is already very large relative to stack, reduce raising desire
+    const potToStackRatio = context.pot / context.playerChips;
+    const potAlreadyLarge = potToStackRatio > 1.5;
+
+    // Dynamic raiseThreshold adjustment:
+    // If someone has already raised (currentBet >= minRaise * 2), raise the threshold
+    // to reduce probability of re-raising — prevents aggressive AI loops
+    let effectiveRaiseThreshold = this.params.raiseThreshold;
+    if (callAmount > 0 && context.currentBet >= context.minRaise * 2) {
+      // There's already been a raise — be more conservative about re-raising
+      effectiveRaiseThreshold += 0.1;
+    }
+    if (potAlreadyLarge) {
+      // Pot is huge relative to stack — be more conservative
+      effectiveRaiseThreshold += 0.1;
+    }
+
     // === No bet to call: check or raise ===
     if (callAmount === 0) {
-      if (strength >= this.params.raiseThreshold || shouldBluff) {
+      if (strength >= effectiveRaiseThreshold || shouldBluff) {
         const raiseAmount = this.calculateRaiseAmount(strength, context);
         return { type: 'raise', amount: raiseAmount };
       }
@@ -97,7 +115,7 @@ export class RuleBasedStrategy implements AIStrategy {
     }
 
     // Raise with strong hands or occasional bluff
-    if (strength >= this.params.raiseThreshold || (shouldBluff && Math.random() < this.params.aggressiveness)) {
+    if (strength >= effectiveRaiseThreshold || (shouldBluff && Math.random() < this.params.aggressiveness)) {
       if (context.playerChips <= callAmount) {
         return { type: 'all-in' };
       }
@@ -122,25 +140,60 @@ export class RuleBasedStrategy implements AIStrategy {
   }
 
   private calculateRaiseAmount(strength: number, context: AIDecisionContext): number {
-    const minRaise = context.minRaise;
-    const maxRaise = context.playerChips + context.playerBet;
+    const { minRaise, currentBet, playerChips, playerBet, bigBlind } = context;
+    const maxRaise = playerChips + playerBet;
 
-    // Base raise: 25%-60% pot depending on hand strength and aggressiveness
-    const potPercentage = 0.25 + strength * this.params.aggressiveness * 0.55;
-    let raiseAmount = Math.floor(context.pot * potPercentage);
+    // === Optimization 1: Normalize raise amounts to valid increments ===
+    // In Texas Hold'em, a raise must be at least the size of the previous raise.
+    // minRaise is the minimum total bet. The increment = minRaise - currentBet.
+    // We choose a multiplier (1x, 2x, 3x...) based on hand strength + aggressiveness.
+    const increment = Math.max(minRaise - currentBet, bigBlind);
 
-    raiseAmount = Math.max(raiseAmount, minRaise);
-    raiseAmount = Math.min(raiseAmount, maxRaise);
+    // Determine multiplier based on hand strength and aggressiveness
+    // Weak hand: 1x, Medium: 2x, Strong: 3x, Very strong: 4x+
+    let multiplier: number;
+    const aggFactor = this.params.aggressiveness;
+
+    if (strength >= 0.85) {
+      // Very strong hand — consider larger raise
+      multiplier = aggFactor >= 0.7 ? 4 : aggFactor >= 0.5 ? 3 : 2;
+    } else if (strength >= 0.7) {
+      multiplier = aggFactor >= 0.7 ? 3 : 2;
+    } else if (strength >= 0.55) {
+      multiplier = 2;
+    } else {
+      // Bluff / marginal — minimum raise
+      multiplier = 1;
+    }
+
+    // Also consider pot-relative sizing: pick multiplier that gets close to desired pot %
+    const desiredPotPct = 0.5 + strength * aggFactor * 0.5; // 50%-100% of pot
+    const desiredTotal = Math.floor(context.pot * desiredPotPct) + currentBet;
+    const potMultiplier = Math.max(1, Math.round((desiredTotal - currentBet) / increment));
+    // Use the lesser of the two to avoid over-betting
+    multiplier = Math.min(multiplier, potMultiplier);
+    multiplier = Math.max(1, multiplier);
+
+    // Final raise amount: currentBet + increment * multiplier, aligned to bigBlind
+    let raiseAmount = currentBet + increment * multiplier;
+
+    // Align to bigBlind
+    raiseAmount = Math.round(raiseAmount / bigBlind) * bigBlind;
+
+    // Clamp to [minRaise, maxRaise]
+    raiseAmount = Math.max(minRaise, Math.min(raiseAmount, maxRaise));
 
     // Cap raise at 40% of stack to avoid over-committing with medium hands
     if (strength < this.params.raiseThreshold + 0.15) {
-      raiseAmount = Math.min(raiseAmount, Math.floor(context.playerChips * 0.4));
+      const stackCap = Math.floor((playerChips * 0.4 + playerBet) / bigBlind) * bigBlind;
+      raiseAmount = Math.min(raiseAmount, stackCap);
       raiseAmount = Math.max(raiseAmount, minRaise);
     }
 
-    const jitter = 1 + (Math.random() - 0.5) * 0.1;
-    raiseAmount = Math.floor(raiseAmount * jitter);
+    // Ensure alignment to bigBlind one more time after clamping
+    raiseAmount = Math.round(raiseAmount / bigBlind) * bigBlind;
+    raiseAmount = Math.max(minRaise, Math.min(raiseAmount, maxRaise));
 
-    return Math.max(raiseAmount, minRaise);
+    return raiseAmount;
   }
 }

@@ -60,6 +60,8 @@ export const locales: Record<Locale, Record<string, string>> = {
     'action.halfPot': '½ Pot',
     'action.threeFourPot': '¾ Pot',
     'action.pot': 'Pot',
+    'action.onePot': '1x Pot',
+    'action.twoPot': '2x Pot',
     'action.bet': 'Bet',
     'action.minRaise': 'Min',
 
@@ -182,6 +184,8 @@ export const locales: Record<Locale, Record<string, string>> = {
     'action.halfPot': '½底池',
     'action.threeFourPot': '¾底池',
     'action.pot': '底池',
+    'action.onePot': '1x底池',
+    'action.twoPot': '2x底池',
     'action.bet': '下注',
     'action.minRaise': '最小',
 
