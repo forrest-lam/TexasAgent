@@ -1,3 +1,7 @@
+import { config as dotenvConfig } from 'dotenv';
+import { resolve as pathResolve } from 'path';
+dotenvConfig({ path: pathResolve(process.cwd(), '.env') });
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
