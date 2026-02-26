@@ -389,12 +389,12 @@ export default function Game() {
             </motion.div>
           )}
 
-          {/* "Stand Up" button for seated players in multiplayer */}
+          {/* "Stand Up" button for seated players in multiplayer — above chat toggle */}
           {!isLocal && !isSpectator && gameState && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed bottom-32 right-2 sm:bottom-36 sm:right-4 z-50"
+              className="fixed bottom-[8.5rem] right-2 sm:bottom-[10rem] sm:right-4 z-50"
             >
               {isStandingUp ? (
                 <div className="px-3 py-2 rounded-lg bg-casino-card/80 border border-yellow-500/30 text-yellow-400 text-xs backdrop-blur-sm">
