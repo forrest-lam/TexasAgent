@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Volume2, VolumeX, Music, Music2 } from 'lucide-react';
-import { isSoundEnabled, setSoundEnabled, playSound, isBGMEnabled, setBGMEnabled, startBGM, stopBGM, isBGMPlaying } from '../../services/sound-service';
+import { isSoundEnabled, setSoundEnabled, playSound, isBGMEnabled, setBGMEnabled, startBGM, stopBGM, isBGMPlaying, getBGMScene } from '../../services/sound-service';
 
 export default function SoundToggle() {
   const [soundOn, setSoundOn] = useState(isSoundEnabled());
@@ -18,7 +18,7 @@ export default function SoundToggle() {
     setBgmOn(next);
     setBGMEnabled(next);
     if (next) {
-      startBGM();
+      startBGM(getBGMScene() || 'lobby');
     } else {
       stopBGM();
     }

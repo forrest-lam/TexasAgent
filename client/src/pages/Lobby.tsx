@@ -13,7 +13,7 @@ import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff, Settings, LogOut, Coi
 import { useI18n } from '../i18n';
 import { LanguageSwitch } from '../components/controls/LanguageSwitch';
 import SoundToggle from '../components/controls/SoundToggle';
-import { playSound } from '../services/sound-service';
+import { playSound, startBGM, stopBGM, isBGMEnabled } from '../services/sound-service';
 import { useAuthStore } from '../stores/auth-store';
 import { getSocket } from '../services/socket-service';
 
@@ -28,7 +28,11 @@ export default function Lobby() {
   const [config, setConfig] = useState<RoomConfig>({ ...DEFAULT_ROOM_CONFIG });
   const [leaderboard, setLeaderboard] = useState<Array<{username: string; chips: number; gamesWon: number; gamesPlayed: number}>>([]);
 
-  useEffect(() => { connect(); }, []);
+  useEffect(() => {
+    connect();
+    if (isBGMEnabled()) startBGM('lobby');
+    return () => { stopBGM(); };
+  }, []);
 
   const fetchLeaderboard = () => {
     const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : `http://${window.location.hostname}:3001`);

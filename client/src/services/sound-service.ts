@@ -340,138 +340,326 @@ export function playSound(type: SoundType) {
   }
 }
 
-// ==================== BGM (synthesized lounge jazz) ====================
-// A chill lo-fi jazz loop built entirely with Web Audio API oscillators.
-// The loop uses a ii-V-I-vi chord progression in C major, common in jazz/lounge music.
+// ==================== BGM System (3 distinct scenes) ====================
+// Each scene has a unique synthesized BGM style:
+// - lobby: Chill lo-fi jazz — relaxed, ambient, smooth
+// - singlePlayer: Focused groove — moderate tempo, bluesy, confident
+// - multiplayer: Intense battle — fast, driving, high-energy
+
+export type BGMScene = 'lobby' | 'singlePlayer' | 'multiplayer';
 
 let bgmPlaying = false;
+let bgmCurrentScene: BGMScene | null = null;
 let bgmGainNode: GainNode | null = null;
-let bgmIntervalId: ReturnType<typeof setInterval> | null = null;
 let bgmOscillators: OscillatorNode[] = [];
 let bgmTimeouts: ReturnType<typeof setTimeout>[] = [];
 
-// Jazz chord voicings (frequencies in Hz) — smooth lounge feel
-const BGM_CHORDS = [
-  // Dm7: D3 F3 A3 C4
-  [146.83, 174.61, 220.00, 261.63],
-  // G7: G2 B3 D4 F4
-  [98.00, 246.94, 293.66, 349.23],
-  // Cmaj7: C3 E3 G3 B3
-  [130.81, 164.81, 196.00, 246.94],
-  // Am7: A2 C3 E3 G3
-  [110.00, 130.81, 164.81, 196.00],
+// ── Lobby BGM: Chill lo-fi jazz (ii-V-I-vi in C major) ──
+const LOBBY_CHORDS = [
+  [146.83, 174.61, 220.00, 261.63], // Dm7
+  [98.00, 246.94, 293.66, 349.23],  // G7
+  [130.81, 164.81, 196.00, 246.94], // Cmaj7
+  [110.00, 130.81, 164.81, 196.00], // Am7
+];
+const LOBBY_BEAT = 2.8; // slower, more relaxed
+
+const LOBBY_MELODY = [
+  [293.66, 330.00, 349.23, 330.00],
+  [392.00, 349.23, 330.00, 293.66],
+  [330.00, 349.23, 392.00, 440.00],
+  [261.63, 293.66, 330.00, 293.66],
 ];
 
-const BGM_BEAT_DURATION = 2.4; // seconds per chord
-const BGM_LOOP_DURATION = BGM_CHORDS.length * BGM_BEAT_DURATION * 1000;
-
-function playBgmChord(ctx: AudioContext, freqs: number[], startTime: number, duration: number, vol: number) {
-  const nodes: OscillatorNode[] = [];
-  freqs.forEach((freq, i) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-
-    osc.type = i === 0 ? 'triangle' : 'sine';
-    osc.frequency.value = freq;
-
-    // Warm low-pass filter
-    filter.type = 'lowpass';
-    filter.frequency.value = 800;
-    filter.Q.value = 0.5;
-
-    // Soft attack and release envelope
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(vol * 0.06, startTime + 0.3);
-    gain.gain.setValueAtTime(vol * 0.06, startTime + duration - 0.5);
-    gain.gain.linearRampToValueAtTime(0, startTime + duration);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    if (bgmGainNode) {
-      gain.connect(bgmGainNode);
-    }
-
-    osc.start(startTime);
-    osc.stop(startTime + duration);
-    nodes.push(osc);
-    bgmOscillators.push(osc);
-  });
-  return nodes;
-}
-
-function playBgmMelody(ctx: AudioContext, chordIndex: number, startTime: number, vol: number) {
-  // Simple melodic notes that follow the chord tones, gives it a jazzy walking feel
-  const melodyPatterns = [
-    [293.66, 330.00, 349.23, 330.00], // over Dm7
-    [392.00, 349.23, 330.00, 293.66], // over G7
-    [330.00, 349.23, 392.00, 440.00], // over Cmaj7
-    [261.63, 293.66, 330.00, 293.66], // over Am7
-  ];
-  const notes = melodyPatterns[chordIndex % melodyPatterns.length];
-  const noteLen = BGM_BEAT_DURATION / notes.length;
-
-  notes.forEach((freq, i) => {
-    const t = startTime + i * noteLen;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-
-    osc.type = 'sine';
-    osc.frequency.value = freq;
-
-    filter.type = 'lowpass';
-    filter.frequency.value = 1200;
-
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(vol * 0.035, t + 0.05);
-    gain.gain.setValueAtTime(vol * 0.035, t + noteLen * 0.6);
-    gain.gain.linearRampToValueAtTime(0, t + noteLen * 0.95);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    if (bgmGainNode) {
-      gain.connect(bgmGainNode);
-    }
-
-    osc.start(t);
-    osc.stop(t + noteLen);
-    bgmOscillators.push(osc);
-  });
-}
-
-function scheduleBgmLoop() {
+function playLobbyLoop(ctx: AudioContext, vol: number) {
   if (!bgmPlaying || !bgmEnabled) return;
-  const ctx = getCtx();
   const now = ctx.currentTime;
 
-  BGM_CHORDS.forEach((chord, i) => {
-    const start = now + i * BGM_BEAT_DURATION;
-    playBgmChord(ctx, chord, start, BGM_BEAT_DURATION, bgmVolume);
-    playBgmMelody(ctx, i, start, bgmVolume);
+  LOBBY_CHORDS.forEach((chord, i) => {
+    const start = now + i * LOBBY_BEAT;
+    // Pad chords — very soft, warm
+    chord.forEach((freq, j) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = j === 0 ? 'triangle' : 'sine';
+      osc.frequency.value = freq;
+      filter.type = 'lowpass';
+      filter.frequency.value = 700;
+      filter.Q.value = 0.4;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(vol * 0.05, start + 0.4);
+      gain.gain.setValueAtTime(vol * 0.05, start + LOBBY_BEAT - 0.6);
+      gain.gain.linearRampToValueAtTime(0, start + LOBBY_BEAT);
+      osc.connect(filter); filter.connect(gain);
+      if (bgmGainNode) gain.connect(bgmGainNode);
+      osc.start(start); osc.stop(start + LOBBY_BEAT);
+      bgmOscillators.push(osc);
+    });
+
+    // Melody — gentle sine notes
+    const melody = LOBBY_MELODY[i % LOBBY_MELODY.length];
+    const noteLen = LOBBY_BEAT / melody.length;
+    melody.forEach((freq, j) => {
+      const t = start + j * noteLen;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      filter.type = 'lowpass'; filter.frequency.value = 1000;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol * 0.028, t + 0.05);
+      gain.gain.setValueAtTime(vol * 0.028, t + noteLen * 0.6);
+      gain.gain.linearRampToValueAtTime(0, t + noteLen * 0.95);
+      osc.connect(filter); filter.connect(gain);
+      if (bgmGainNode) gain.connect(bgmGainNode);
+      osc.start(t); osc.stop(t + noteLen);
+      bgmOscillators.push(osc);
+    });
   });
 
-  // Schedule next loop iteration
-  const tid = setTimeout(() => {
-    scheduleBgmLoop();
-  }, BGM_LOOP_DURATION - 100); // slight overlap for seamless loop
+  const loopMs = LOBBY_CHORDS.length * LOBBY_BEAT * 1000;
+  const tid = setTimeout(() => playLobbyLoop(ctx, vol), loopMs - 100);
   bgmTimeouts.push(tid);
 }
 
-export function startBGM() {
-  if (bgmPlaying || !bgmEnabled) return;
+// ── Single Player BGM: Focused blues groove (I-IV-I-V in A minor) ──
+const SINGLE_CHORDS = [
+  [110.00, 164.81, 220.00, 261.63], // Am7
+  [146.83, 220.00, 261.63, 349.23], // Dm7
+  [110.00, 164.81, 220.00, 329.63], // Am(add9)
+  [164.81, 196.00, 246.94, 329.63], // Em7
+];
+const SINGLE_BEAT = 2.0; // moderate tempo
+
+const SINGLE_MELODY = [
+  [440.00, 493.88, 523.25, 493.88, 440.00, 392.00, 440.00, 523.25],
+  [587.33, 523.25, 493.88, 440.00, 392.00, 440.00, 493.88, 440.00],
+  [523.25, 587.33, 659.25, 587.33, 523.25, 493.88, 440.00, 523.25],
+  [392.00, 440.00, 493.88, 523.25, 587.33, 523.25, 493.88, 440.00],
+];
+
+// Walking bass line for groove
+const SINGLE_BASS = [
+  [110.00, 130.81, 146.83, 130.81],
+  [146.83, 164.81, 174.61, 146.83],
+  [110.00, 123.47, 130.81, 146.83],
+  [164.81, 146.83, 130.81, 123.47],
+];
+
+function playSinglePlayerLoop(ctx: AudioContext, vol: number) {
+  if (!bgmPlaying || !bgmEnabled) return;
+  const now = ctx.currentTime;
+
+  SINGLE_CHORDS.forEach((chord, i) => {
+    const start = now + i * SINGLE_BEAT;
+
+    // Pad — slightly brighter than lobby
+    chord.forEach((freq, j) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = j === 0 ? 'triangle' : 'sine';
+      osc.frequency.value = freq;
+      filter.type = 'lowpass'; filter.frequency.value = 900; filter.Q.value = 0.6;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(vol * 0.055, start + 0.25);
+      gain.gain.setValueAtTime(vol * 0.055, start + SINGLE_BEAT - 0.4);
+      gain.gain.linearRampToValueAtTime(0, start + SINGLE_BEAT);
+      osc.connect(filter); filter.connect(gain);
+      if (bgmGainNode) gain.connect(bgmGainNode);
+      osc.start(start); osc.stop(start + SINGLE_BEAT);
+      bgmOscillators.push(osc);
+    });
+
+    // Melody — bluesy, 8 notes per chord
+    const melody = SINGLE_MELODY[i % SINGLE_MELODY.length];
+    const noteLen = SINGLE_BEAT / melody.length;
+    melody.forEach((freq, j) => {
+      const t = start + j * noteLen;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = j % 3 === 0 ? 'triangle' : 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol * 0.04, t + 0.03);
+      gain.gain.setValueAtTime(vol * 0.04, t + noteLen * 0.55);
+      gain.gain.linearRampToValueAtTime(0, t + noteLen * 0.9);
+      osc.connect(gain);
+      if (bgmGainNode) gain.connect(bgmGainNode);
+      osc.start(t); osc.stop(t + noteLen);
+      bgmOscillators.push(osc);
+    });
+
+    // Walking bass — adds groove
+    const bass = SINGLE_BASS[i % SINGLE_BASS.length];
+    const bassLen = SINGLE_BEAT / bass.length;
+    bass.forEach((freq, j) => {
+      const t = start + j * bassLen;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol * 0.07, t + 0.02);
+      gain.gain.setValueAtTime(vol * 0.07, t + bassLen * 0.6);
+      gain.gain.linearRampToValueAtTime(0, t + bassLen * 0.9);
+      osc.connect(gain);
+      if (bgmGainNode) gain.connect(bgmGainNode);
+      osc.start(t); osc.stop(t + bassLen);
+      bgmOscillators.push(osc);
+    });
+  });
+
+  const loopMs = SINGLE_CHORDS.length * SINGLE_BEAT * 1000;
+  const tid = setTimeout(() => playSinglePlayerLoop(ctx, vol), loopMs - 100);
+  bgmTimeouts.push(tid);
+}
+
+// ── Multiplayer BGM: Intense battle (i-VII-VI-V in E minor, driving rhythm) ──
+const MULTI_CHORDS = [
+  [164.81, 246.94, 329.63, 493.88], // Em
+  [146.83, 220.00, 293.66, 440.00], // D
+  [130.81, 196.00, 261.63, 392.00], // C
+  [123.47, 185.00, 246.94, 369.99], // B7
+];
+const MULTI_BEAT = 1.5; // fast!
+
+const MULTI_MELODY = [
+  [659.25, 739.99, 783.99, 880.00, 783.99, 739.99, 659.25, 587.33, 659.25, 783.99, 880.00, 783.99],
+  [587.33, 659.25, 739.99, 659.25, 587.33, 523.25, 587.33, 659.25, 739.99, 783.99, 739.99, 659.25],
+  [523.25, 587.33, 659.25, 739.99, 783.99, 739.99, 659.25, 587.33, 523.25, 587.33, 659.25, 587.33],
+  [493.88, 587.33, 659.25, 739.99, 783.99, 880.00, 783.99, 659.25, 587.33, 493.88, 587.33, 659.25],
+];
+
+const MULTI_BASS = [
+  [82.41, 82.41, 98.00, 82.41, 110.00, 82.41],
+  [73.42, 73.42, 87.31, 73.42, 98.00, 73.42],
+  [65.41, 65.41, 82.41, 65.41, 98.00, 82.41],
+  [61.74, 61.74, 73.42, 82.41, 98.00, 82.41],
+];
+
+function playMultiplayerLoop(ctx: AudioContext, vol: number) {
+  if (!bgmPlaying || !bgmEnabled) return;
+  const now = ctx.currentTime;
+
+  MULTI_CHORDS.forEach((chord, i) => {
+    const start = now + i * MULTI_BEAT;
+
+    // Power chords — aggressive, louder
+    chord.forEach((freq, j) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = j < 2 ? 'sawtooth' : 'triangle';
+      osc.frequency.value = freq;
+      filter.type = 'lowpass'; filter.frequency.value = 1200; filter.Q.value = 1.0;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(vol * 0.045, start + 0.08);
+      gain.gain.setValueAtTime(vol * 0.045, start + MULTI_BEAT - 0.2);
+      gain.gain.linearRampToValueAtTime(0, start + MULTI_BEAT);
+      osc.connect(filter); filter.connect(gain);
+      if (bgmGainNode) gain.connect(bgmGainNode);
+      osc.start(start); osc.stop(start + MULTI_BEAT);
+      bgmOscillators.push(osc);
+    });
+
+    // Fast melody — 12 notes per chord for intensity
+    const melody = MULTI_MELODY[i % MULTI_MELODY.length];
+    const noteLen = MULTI_BEAT / melody.length;
+    melody.forEach((freq, j) => {
+      const t = start + j * noteLen;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = j % 2 === 0 ? 'sawtooth' : 'triangle';
+      osc.frequency.value = freq;
+      // Punchy, staccato notes
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol * 0.038, t + 0.01);
+      gain.gain.setValueAtTime(vol * 0.038, t + noteLen * 0.4);
+      gain.gain.linearRampToValueAtTime(0, t + noteLen * 0.75);
+      osc.connect(gain);
+      if (bgmGainNode) gain.connect(bgmGainNode);
+      osc.start(t); osc.stop(t + noteLen);
+      bgmOscillators.push(osc);
+    });
+
+    // Driving bass — rhythmic, heavy
+    const bass = MULTI_BASS[i % MULTI_BASS.length];
+    const bassLen = MULTI_BEAT / bass.length;
+    bass.forEach((freq, j) => {
+      const t = start + j * bassLen;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      // Tight, punchy bass
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol * 0.09, t + 0.01);
+      gain.gain.setValueAtTime(vol * 0.09, t + bassLen * 0.5);
+      gain.gain.linearRampToValueAtTime(0, t + bassLen * 0.8);
+      osc.connect(gain);
+      if (bgmGainNode) gain.connect(bgmGainNode);
+      osc.start(t); osc.stop(t + bassLen);
+      bgmOscillators.push(osc);
+    });
+
+    // Percussive hits (noise-based) — adds rhythmic drive
+    const hitCount = 4;
+    const hitLen = MULTI_BEAT / hitCount;
+    for (let h = 0; h < hitCount; h++) {
+      const t = start + h * hitLen;
+      const bufLen = Math.floor(ctx.sampleRate * 0.04);
+      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let s = 0; s < bufLen; s++) {
+        data[s] = (Math.random() * 2 - 1) * 0.5;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const hpf = ctx.createBiquadFilter();
+      hpf.type = 'highpass'; hpf.frequency.value = 4000;
+      const hGain = ctx.createGain();
+      const accent = h === 0 || h === 2 ? 1.4 : 0.8;
+      hGain.gain.setValueAtTime(vol * 0.06 * accent, t);
+      hGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      src.connect(hpf); hpf.connect(hGain);
+      if (bgmGainNode) hGain.connect(bgmGainNode);
+      src.start(t); src.stop(t + 0.04);
+    }
+  });
+
+  const loopMs = MULTI_CHORDS.length * MULTI_BEAT * 1000;
+  const tid = setTimeout(() => playMultiplayerLoop(ctx, vol), loopMs - 100);
+  bgmTimeouts.push(tid);
+}
+
+// ── BGM control functions ──
+
+export function startBGM(scene: BGMScene = 'lobby') {
+  // If already playing the same scene, do nothing
+  if (bgmPlaying && bgmCurrentScene === scene) return;
+  // If playing a different scene, stop first
+  if (bgmPlaying) stopBGM();
+  if (!bgmEnabled) return;
   try {
     const ctx = getCtx();
     bgmGainNode = ctx.createGain();
     bgmGainNode.gain.value = 1;
     bgmGainNode.connect(ctx.destination);
     bgmPlaying = true;
-    scheduleBgmLoop();
+    bgmCurrentScene = scene;
+    switch (scene) {
+      case 'lobby': playLobbyLoop(ctx, bgmVolume); break;
+      case 'singlePlayer': playSinglePlayerLoop(ctx, bgmVolume); break;
+      case 'multiplayer': playMultiplayerLoop(ctx, bgmVolume); break;
+    }
   } catch {}
 }
 
 export function stopBGM() {
   bgmPlaying = false;
+  // Keep bgmCurrentScene so toggle can resume the correct scene
   bgmTimeouts.forEach(tid => clearTimeout(tid));
   bgmTimeouts = [];
   bgmOscillators.forEach(osc => {
@@ -483,6 +671,8 @@ export function stopBGM() {
     bgmGainNode = null;
   }
 }
+
+export function getBGMScene(): BGMScene | null { return bgmCurrentScene; }
 
 export function isBGMEnabled(): boolean { return bgmEnabled; }
 export function getBGMVolume(): number { return bgmVolume; }

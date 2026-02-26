@@ -131,9 +131,9 @@ export default function Game() {
   useEffect(() => {
     let cleanupGameListeners: (() => void) | undefined;
 
-    // Start BGM when entering the game page
+    // Start BGM when entering the game page — different scene for single/multiplayer
     if (isBGMEnabled()) {
-      startBGM();
+      startBGM(isLocal ? 'singlePlayer' : 'multiplayer');
     }
 
     if (isLocal) {
