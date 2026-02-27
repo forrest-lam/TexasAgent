@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useGameStore } from '../stores/game-store';
 import { useLobbyStore } from '../stores/lobby-store';
 import { DEFAULT_ROOM_CONFIG, RoomConfig } from '@texas-agent/shared';
-import { LocalGameEngine } from '../services/local-game';
+import { LocalGameEngine, LocalGameOptions } from '../services/local-game';
 import { getSocket, connectSocket, reconnectWithToken } from '../services/socket-service';
 import PokerTable from '../components/table/PokerTable';
 import ActionPanel from '../components/controls/ActionPanel';
@@ -189,13 +189,21 @@ export default function Game() {
   }, [roomId, token]);
 
   const startLocalGame = () => {
-    const userChips = useAuthStore.getState().user?.chips ?? 2000;
+    const { user: authUser, token: authToken } = useAuthStore.getState();
+    const userChips = authUser?.chips ?? 2000;
     const config: RoomConfig = { ...DEFAULT_ROOM_CONFIG, aiCount: 5 };
+    const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : `http://${window.location.hostname}:3001`);
+    const options: LocalGameOptions = {
+      serverUrl: API_BASE,
+      authToken: authToken || undefined,
+      maxLLMBots: 2,
+    };
     localEngine.current = new LocalGameEngine(
       config,
       (state) => setGameState(state),
       (msg) => addLog(msg),
       userChips,
+      options,
     );
     localEngine.current.start();
     setStarted(true);

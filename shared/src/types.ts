@@ -193,14 +193,14 @@ export const DEFAULT_USER_CHIPS = 2000;
 export const AI_STARTING_CHIPS = 1000;
 export const LLM_BOT_STARTING_CHIPS = 2000;
 
-/** Built-in LLM bot definitions */
+/** Built-in LLM bot definitions — all use the same personality for fair model comparison */
 export const LLM_BOT_CONFIGS = [
   {
     id: 'llm-bot-deepseek',
     name: 'DeepSeek',
     model: 'deepseek-v3.2',
     apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    personality: 'aggressive' as AIPersonality,
+    personality: 'balanced' as AIPersonality,
     emoji: '🤖',
   },
   {
@@ -216,7 +216,7 @@ export const LLM_BOT_CONFIGS = [
     name: 'MiniMax',
     model: 'MiniMax-M2.5',
     apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    personality: 'conservative' as AIPersonality,
+    personality: 'balanced' as AIPersonality,
     emoji: '⚡',
   },
   {

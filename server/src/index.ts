@@ -262,6 +262,40 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
   }
 });
 
+// --- LLM bot decision for single-player mode ---
+app.post('/api/llm/bot-decision', authMiddleware, async (req, res) => {
+  const { botId, context } = req.body;
+  if (!botId || !context) {
+    res.status(400).json({ error: 'botId and context are required' });
+    return;
+  }
+
+  // Dynamically import the bot registry
+  const { llmBotRegistry } = await import('./ai/llm-bot-player');
+  if (!llmBotRegistry.isValidBotId(botId)) {
+    res.status(400).json({ error: `Unknown bot id: ${botId}` });
+    return;
+  }
+
+  const bot = llmBotRegistry.get(botId as any);
+  if (!bot) {
+    res.status(500).json({ error: 'Bot not found' });
+    return;
+  }
+
+  const startTime = Date.now();
+  console.log(`[LLM BotDecision] botId=${botId} model=${bot.model} phase=${context.phase}`);
+
+  try {
+    const decision = await bot.makeDecision(context);
+    console.log(`[LLM BotDecision] ${bot.name} decided: ${decision.type}${decision.amount ? ` ${decision.amount}` : ''} elapsed=${Date.now() - startTime}ms`);
+    res.json({ action: decision });
+  } catch (err: any) {
+    console.error(`[LLM BotDecision] Error: ${err?.message}`);
+    res.status(500).json({ error: 'Decision failed', action: { type: 'fold' } });
+  }
+});
+
 // Update chips (for single player mode settlement)
 app.put('/api/user/chips', authMiddleware, (req, res) => {
   const { chips } = req.body;

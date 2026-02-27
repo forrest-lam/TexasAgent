@@ -1,5 +1,24 @@
-import { AIDecisionContext } from '@texas-agent/shared';
+import { AIDecisionContext, AIPersonality } from '@texas-agent/shared';
 import { formatCards } from '@texas-agent/shared';
+
+/** Personality-specific system messages — stronger framing than user-level hints */
+const SYSTEM_MESSAGES: Record<AIPersonality, string> = {
+  aggressive: `You are a fearless, hyper-aggressive Texas Hold'em shark. You LOVE raising and putting pressure on opponents. Folding disgusts you — you only fold when you have absolute garbage and face a huge bet. Your default action is RAISE. Bluff often. Respond ONLY with valid JSON: {"action":"fold|check|call|raise|all-in","amount":number,"reasoning":"brief reason"}`,
+  conservative: `You are a disciplined, patient Texas Hold'em grinder. You wait for premium hands and strong spots. You prefer to minimize losses rather than maximize risk. Respond ONLY with valid JSON: {"action":"fold|check|call|raise|all-in","amount":number,"reasoning":"brief reason"}`,
+  balanced: `You are a skilled, adaptive Texas Hold'em professional. You play a solid TAG (tight-aggressive) style but you're not afraid to make big moves when the situation calls for it. You exploit weak players aggressively and give respect to strong ones. Respond ONLY with valid JSON: {"action":"fold|check|call|raise|all-in","amount":number,"reasoning":"brief reason"}`,
+};
+
+export function getSystemMessage(personality: AIPersonality): string {
+  return SYSTEM_MESSAGES[personality];
+}
+
+export function getTemperature(personality: AIPersonality): number {
+  switch (personality) {
+    case 'aggressive': return 0.9;
+    case 'balanced': return 0.7;
+    case 'conservative': return 0.5;
+  }
+}
 
 export function buildDecisionPrompt(context: AIDecisionContext): string {
   const callAmount = context.currentBet - context.playerBet;
@@ -69,9 +88,9 @@ OPPONENTS (current state):
 ${opponentInfo}
 ${handHistorySection}${profilesSection}
 PERSONALITY: ${context.personality}
-${context.personality === 'conservative' ? '- Play tight, fold marginal hands, only raise with strong hands' : ''}
-${context.personality === 'aggressive' ? '- Play loose-aggressive, apply pressure, bluff occasionally, raise frequently' : ''}
-${context.personality === 'balanced' ? '- Play solid TAG style, mix raises and calls, bluff selectively based on position' : ''}
+${context.personality === 'conservative' ? '- Play tight, fold marginal hands, only raise with strong hands. Patience is your weapon.' : ''}
+${context.personality === 'aggressive' ? '- RAISE is your DEFAULT action. Bluff at least 25% of the time. Apply maximum pressure. Only fold when truly hopeless facing a big bet. When in doubt, RAISE.' : ''}
+${context.personality === 'balanced' ? '- Play solid TAG style but lean aggressive. Raise more than you call. Bluff in good spots. Exploit weak/passive opponents with frequent raises and barrel bluffs.' : ''}
 ${profilesSection ? '- IMPORTANT: Use the opponent profiles above to make exploitative adjustments. Target weak players and avoid traps from strong ones.' : ''}
 
 Available actions: ${availableActions.join(', ')}

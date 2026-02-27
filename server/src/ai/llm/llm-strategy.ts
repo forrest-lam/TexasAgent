@@ -1,7 +1,7 @@
 import { PlayerAction, AIDecisionContext, ActionType } from '@texas-agent/shared';
 import { AIStrategy } from '../ai-strategy';
 import { RuleBasedStrategy } from '../rule-based/rule-strategy';
-import { buildDecisionPrompt, parseDecisionResponse } from './prompt-builder';
+import { buildDecisionPrompt, parseDecisionResponse, getSystemMessage, getTemperature } from './prompt-builder';
 
 export interface LLMConfig {
   apiUrl: string;
@@ -21,7 +21,7 @@ export class LLMStrategy implements AIStrategy {
   private config: LLMConfig;
   private fallback: RuleBasedStrategy;
 
-  constructor(personality: AIDecisionContext['personality'], config?: Partial<LLMConfig>) {
+  constructor(private personality: AIDecisionContext['personality'], config?: Partial<LLMConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.fallback = new RuleBasedStrategy(personality);
   }
@@ -54,11 +54,11 @@ export class LLMStrategy implements AIStrategy {
         messages: [
           {
             role: 'system',
-            content: 'You are an expert Texas Hold\'em poker AI. Respond only with valid JSON.',
+            content: getSystemMessage(this.personality),
           },
           { role: 'user', content: prompt },
         ],
-        temperature: 0.7,
+        temperature: getTemperature(this.personality),
         max_tokens: 200,
       }),
       signal: controller.signal,

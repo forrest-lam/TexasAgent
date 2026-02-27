@@ -9,7 +9,7 @@
 import { PlayerAction, AIDecisionContext, LLM_BOT_CONFIGS, LLMBotId, AIPersonality } from '@texas-agent/shared';
 import { AIStrategy } from './ai-strategy';
 import { RuleBasedStrategy } from './rule-based/rule-strategy';
-import { buildDecisionPrompt, parseDecisionResponse } from './llm/prompt-builder';
+import { buildDecisionPrompt, parseDecisionResponse, getSystemMessage, getTemperature } from './llm/prompt-builder';
 
 const LLM_BOT_TIMEOUT_MS = 50_000;
 
@@ -100,11 +100,11 @@ export class LLMBotPlayer {
           messages: [
             {
               role: 'system',
-              content: "You are an expert Texas Hold'em poker player. Respond ONLY with valid JSON in the format: {\"action\":\"fold|check|call|raise|all-in\",\"amount\":number,\"reasoning\":\"brief reason\"}",
+              content: getSystemMessage(this.personality),
             },
             { role: 'user', content: prompt },
           ],
-          temperature: 0.6,
+          temperature: getTemperature(this.personality),
           max_tokens: 300,
         }),
         signal: controller.signal,
