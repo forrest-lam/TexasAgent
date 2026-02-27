@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
-import { UserProfile, DEFAULT_USER_CHIPS, LLM_BOT_CONFIGS, LLM_BOT_STARTING_CHIPS } from '@texas-agent/shared';
+import { UserProfile, DEFAULT_USER_CHIPS, LLM_BOT_CONFIGS, LLM_BOT_STARTING_CHIPS, RULE_BOT_CONFIGS, RULE_BOT_STARTING_CHIPS } from '@texas-agent/shared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,13 +73,46 @@ function ensureLLMBotAccounts() {
   if (changed) saveUsers();
 }
 
+/** Ensure all rule-based bot accounts exist in the user store */
+function ensureRuleBotAccounts() {
+  let changed = false;
+  for (const cfg of RULE_BOT_CONFIGS) {
+    if (!users.has(cfg.id)) {
+      const bot: StoredUser = {
+        id: cfg.id,
+        username: cfg.name,
+        passwordHash: '',
+        chips: RULE_BOT_STARTING_CHIPS,
+        isRuleBot: true,
+        stats: { gamesPlayed: 0, gamesWon: 0, totalEarnings: 0 },
+        createdAt: Date.now(),
+      };
+      users.set(cfg.id, bot);
+      changed = true;
+      console.log(`[UserStore] Created rule bot account: ${cfg.name} (${cfg.id})`);
+    } else {
+      const existing = users.get(cfg.id)!;
+      if (!existing.isRuleBot) {
+        existing.isRuleBot = true;
+        changed = true;
+      }
+    }
+  }
+  if (changed) saveUsers();
+}
+
 // Load on startup
 loadUsers();
 ensureLLMBotAccounts();
+ensureRuleBotAccounts();
 
 export function createUser(username: string, password: string): UserProfile | null {
   // Prevent registering with LLM bot names
   for (const cfg of LLM_BOT_CONFIGS) {
+    if (cfg.name.toLowerCase() === username.toLowerCase()) return null;
+  }
+  // Prevent registering with rule bot names
+  for (const cfg of RULE_BOT_CONFIGS) {
     if (cfg.name.toLowerCase() === username.toLowerCase()) return null;
   }
   // Check duplicate (case-insensitive)
@@ -107,8 +140,8 @@ export function createUser(username: string, password: string): UserProfile | nu
 export function authenticateUser(username: string, password: string): UserProfile | null {
   for (const u of users.values()) {
     if (u.username.toLowerCase() === username.toLowerCase()) {
-      // LLM bots cannot authenticate
-      if (u.isLLMBot) return null;
+      // LLM bots and rule bots cannot authenticate
+      if (u.isLLMBot || u.isRuleBot) return null;
       if (bcrypt.compareSync(password, u.passwordHash)) {
         return toProfile(u);
       }
@@ -173,5 +206,12 @@ export function getAllUsers(): UserProfile[] {
 export function getLLMBotProfiles(): UserProfile[] {
   return Array.from(users.values())
     .filter(u => u.isLLMBot)
+    .map(toProfile);
+}
+
+/** Get all rule-based bot profiles */
+export function getRuleBotProfiles(): UserProfile[] {
+  return Array.from(users.values())
+    .filter(u => u.isRuleBot)
     .map(toProfile);
 }

@@ -29,6 +29,8 @@ export interface Player {
   isAI: boolean;
   isLLMBot?: boolean;       // true for the named LLM bot accounts (DeepSeek/Kimi/MiniMax/Qwen)
   llmBotId?: string;        // matches the id in LLM_BOT_CONFIGS
+  isRuleBot?: boolean;      // true for the named rule-based bot accounts (Blaze/Shield/Sage)
+  ruleBotId?: string;       // matches the id in RULE_BOT_CONFIGS
   aiPersonality?: AIPersonality;
   aiEngineType?: AIEngineType;
   seatIndex: number;
@@ -166,6 +168,7 @@ export interface UserProfile {
   username: string;
   chips: number;
   isLLMBot?: boolean;       // system LLM bot account
+  isRuleBot?: boolean;      // system rule-based bot account
   llmConfig?: {
     apiKey: string;
     apiBaseUrl: string;
@@ -228,6 +231,31 @@ export const LLM_BOT_CONFIGS = [
 
 export type LLMBotId = (typeof LLM_BOT_CONFIGS)[number]['id'];
 
+/** Built-in rule-based bot definitions (persistent accounts, appear on leaderboard) */
+export const RULE_BOT_CONFIGS = [
+  {
+    id: 'rule-bot-aggressive',
+    name: 'Blaze',
+    personality: 'aggressive' as AIPersonality,
+    emoji: '🔥',
+  },
+  {
+    id: 'rule-bot-conservative',
+    name: 'Shield',
+    personality: 'conservative' as AIPersonality,
+    emoji: '🛡️',
+  },
+  {
+    id: 'rule-bot-balanced',
+    name: 'Sage',
+    personality: 'balanced' as AIPersonality,
+    emoji: '⚖️',
+  },
+] as const;
+
+export type RuleBotId = (typeof RULE_BOT_CONFIGS)[number]['id'];
+export const RULE_BOT_STARTING_CHIPS = 2000;
+
 // Socket event types
 export interface ServerToClientEvents {
   'room:list': (rooms: Room[]) => void;
@@ -246,6 +274,7 @@ export interface ServerToClientEvents {
   'error': (message: string) => void;
   'chat:message': (data: { playerId: string; playerName: string; message: string; timestamp: number }) => void;
   'room:llm-bots': (bots: Array<{ id: string; name: string; model: string; chips: number; busy: boolean }>) => void;
+  'room:rule-bots': (bots: Array<{ id: string; name: string; personality: string; emoji: string; chips: number; busy: boolean }>) => void;
   'room:reaction': (data: { fromId: string; fromName: string; toId: string; toName: string; emoji: string }) => void;
 }
 
@@ -260,6 +289,8 @@ export interface ClientToServerEvents {
   'room:add-ai': (personality: AIPersonality, engineType: AIEngineType) => void;
   'room:invite-llm-bot': (botId: string) => void;
   'room:remove-llm-bot': (botId: string) => void;
+  'room:invite-rule-bot': (botId: string) => void;
+  'room:remove-rule-bot': (botId: string) => void;
   'game:start': () => void;
   'game:action': (action: PlayerAction) => void;
   'game:resync': () => void;

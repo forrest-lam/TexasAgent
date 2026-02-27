@@ -138,7 +138,8 @@ export class LLMBotPlayer {
       }
 
       const result = this.validateAndNormalize(decision, context);
-      console.log(`[LLMBot:${this.name}] ✅ LLM decision: ${result.type}${result.type === 'raise' ? ` ${result.amount}` : ''}`);
+      const reasonStr = decision.reasoning ? ` | Reason: ${decision.reasoning}` : '';
+      console.log(`[LLMBot:${this.name}] ✅ LLM decision: ${result.type}${result.type === 'raise' ? ` ${result.amount}` : ''}${reasonStr}`);
       return result;
 
     } catch (err: any) {

@@ -63,6 +63,7 @@ app.get('/api/leaderboard', (_req, res) => {
       gamesWon: u.stats.gamesWon,
       gamesPlayed: u.stats.gamesPlayed,
       isLLMBot: u.isLLMBot ?? false,
+      isRuleBot: u.isRuleBot ?? false,
     }));
   res.json({ leaderboard });
 });

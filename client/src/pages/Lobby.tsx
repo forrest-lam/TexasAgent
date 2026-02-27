@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLobbyStore, LLMBotInfo } from '../stores/lobby-store';
+import { useLobbyStore, LLMBotInfo, RuleBotInfo } from '../stores/lobby-store';
 import { DEFAULT_ROOM_CONFIG, BLIND_LEVELS, RoomConfig, AIPersonality } from '@texas-agent/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,14 +19,14 @@ import { getSocket } from '../services/socket-service';
 
 export default function Lobby() {
   const navigate = useNavigate();
-  const { rooms, currentRoom, isConnected, isSpectating, connect, createRoom, joinRoom, spectateRoom, addAI, startGame, inviteLLMBot, removeLLMBot, llmBots } = useLobbyStore();
+  const { rooms, currentRoom, isConnected, isSpectating, connect, createRoom, joinRoom, spectateRoom, addAI, startGame, inviteLLMBot, removeLLMBot, llmBots, inviteRuleBot, removeRuleBot, ruleBots } = useLobbyStore();
   const { t } = useI18n();
   const { user, logout } = useAuthStore();
 
   const [showCreate, setShowCreate] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [config, setConfig] = useState<RoomConfig>({ ...DEFAULT_ROOM_CONFIG });
-  const [leaderboard, setLeaderboard] = useState<Array<{username: string; chips: number; gamesWon: number; gamesPlayed: number; isLLMBot?: boolean}>>([]);
+  const [leaderboard, setLeaderboard] = useState<Array<{username: string; chips: number; gamesWon: number; gamesPlayed: number; isLLMBot?: boolean; isRuleBot?: boolean}>>([]);
 
   useEffect(() => {
     connect();
@@ -81,6 +81,9 @@ export default function Lobby() {
       llmBots={llmBots}
       onInviteLLMBot={inviteLLMBot}
       onRemoveLLMBot={removeLLMBot}
+      ruleBots={ruleBots}
+      onInviteRuleBot={inviteRuleBot}
+      onRemoveRuleBot={removeRuleBot}
     />;
   }
 
@@ -237,7 +240,7 @@ export default function Lobby() {
                 return (
                   <div key={entry.username} className={`grid grid-cols-4 gap-2 px-4 py-2.5 text-sm items-center border-b border-casino-border/10 last:border-0 ${index < 3 ? 'bg-gold-500/5' : ''}`}>
                     <span className="font-bold text-base">{medal}</span>
-                    <span className="text-white font-medium truncate flex items-center gap-1">{entry.username}{entry.isLLMBot && <span className="text-[9px] text-purple-400 border border-purple-500/30 rounded px-1 py-0 leading-tight">AI</span>}</span>
+                    <span className="text-white font-medium truncate flex items-center gap-1">{entry.username}{entry.isLLMBot && <span className="text-[9px] text-purple-400 border border-purple-500/30 rounded px-1 py-0 leading-tight">AI</span>}{entry.isRuleBot && <span className="text-[9px] text-emerald-400 border border-emerald-500/30 rounded px-1 py-0 leading-tight">BOT</span>}</span>
                     <span className="text-gold-400 font-mono text-right">${entry.chips.toLocaleString()}</span>
                     <span className="text-gray-400 text-right">{winRate}%</span>
                   </div>
@@ -316,9 +319,10 @@ export default function Lobby() {
   );
 }
 
-function RoomWaitingScreen({ room, onAddAI, onStart, onLeave, isOwner, llmBots, onInviteLLMBot, onRemoveLLMBot }: {
+function RoomWaitingScreen({ room, onAddAI, onStart, onLeave, isOwner, llmBots, onInviteLLMBot, onRemoveLLMBot, ruleBots, onInviteRuleBot, onRemoveRuleBot }: {
   room: any; onAddAI: () => void; onStart: () => void; onLeave: () => void; isOwner: boolean;
   llmBots?: LLMBotInfo[]; onInviteLLMBot?: (id: string) => void; onRemoveLLMBot?: (id: string) => void;
+  ruleBots?: RuleBotInfo[]; onInviteRuleBot?: (id: string) => void; onRemoveRuleBot?: (id: string) => void;
 }) {
   const { t } = useI18n();
   const minPlayers = 2;
@@ -335,6 +339,7 @@ function RoomWaitingScreen({ room, onAddAI, onStart, onLeave, isOwner, llmBots, 
           {room.players.map((p: any) => (
             <div key={p.id} className="flex items-center gap-3 px-4 py-2 rounded-lg bg-white/5">
               {p.isLLMBot ? <span className="text-base leading-none">{(llmBots ?? []).find(b => b.id === p.llmBotId)?.emoji ?? '🤖'}</span>
+                : p.isRuleBot ? <span className="text-base leading-none">{(ruleBots ?? []).find(b => b.id === p.ruleBotId)?.emoji ?? '🤖'}</span>
                 : p.isAI ? <Bot size={16} className="text-purple-400" />
                 : <Users size={16} className="text-blue-400" />}
               <span className="text-sm text-white font-medium">{p.name}</span>
@@ -342,7 +347,10 @@ function RoomWaitingScreen({ room, onAddAI, onStart, onLeave, isOwner, llmBots, 
               {p.isLLMBot && isOwner && onRemoveLLMBot && (
                 <button onClick={() => onRemoveLLMBot(p.llmBotId)} className="ml-auto text-xs text-red-400 hover:text-red-300 cursor-pointer px-1">✕</button>
               )}
-              {p.isAI && !p.isLLMBot && <span className="text-xs text-gray-500 ml-auto">{p.aiPersonality}</span>}
+              {p.isRuleBot && isOwner && onRemoveRuleBot && (
+                <button onClick={() => onRemoveRuleBot(p.ruleBotId)} className="ml-auto text-xs text-red-400 hover:text-red-300 cursor-pointer px-1">✕</button>
+              )}
+              {p.isAI && !p.isLLMBot && !p.isRuleBot && <span className="text-xs text-gray-500 ml-auto">{p.aiPersonality}</span>}
             </div>
           ))}
         </div>
@@ -390,6 +398,42 @@ function RoomWaitingScreen({ room, onAddAI, onStart, onLeave, isOwner, llmBots, 
               })}
             </div>
             <p className="text-[9px] text-gray-600">每个AI模型同时只能在一个房间游戏</p>
+          </div>
+        )}
+
+        {/* Rule Bot invite panel */}
+        {isOwner && ruleBots && ruleBots.length > 0 && (
+          <div className="border border-casino-border/30 rounded-xl p-3 space-y-2 bg-black/10">
+            <p className="text-[11px] text-gray-500 font-medium">邀请规则机器人</p>
+            <div className="flex flex-wrap gap-2">
+              {ruleBots.map(bot => {
+                const alreadyIn = room.players.some((p: any) => p.ruleBotId === bot.id);
+                const isFull = room.players.length >= room.config.maxPlayers;
+                return (
+                  <button
+                    key={bot.id}
+                    onClick={() => !alreadyIn && !bot.busy && !isFull && onInviteRuleBot?.(bot.id)}
+                    disabled={alreadyIn || (bot.busy && !alreadyIn) || isFull}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer
+                      ${alreadyIn
+                        ? 'bg-green-500/20 border-green-500/40 text-green-400 cursor-default'
+                        : bot.busy
+                        ? 'bg-white/5 border-white/10 text-gray-600 cursor-not-allowed opacity-50'
+                        : isFull
+                        ? 'opacity-40 cursor-not-allowed bg-white/5 border-white/10 text-gray-400'
+                        : 'bg-white/5 border-white/10 text-gray-300 hover:bg-emerald-500/10 hover:border-emerald-500/30 hover:text-emerald-300'
+                      }`}
+                    title={bot.busy && !alreadyIn ? '该机器人已在其他房间游戏中' : `${bot.personality} 策略`}
+                  >
+                    <span>{bot.emoji}</span>
+                    <span>{bot.name}</span>
+                    {alreadyIn && <span className="text-[9px] text-green-500">✓</span>}
+                    {bot.busy && !alreadyIn && <span className="text-[9px] text-gray-600">忙</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[9px] text-gray-600">规则机器人有独立排行榜账号，每个同时只能在一个房间</p>
           </div>
         )}
 

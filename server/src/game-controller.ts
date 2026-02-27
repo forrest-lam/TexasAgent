@@ -8,6 +8,7 @@ import {
 } from '@texas-agent/shared';
 import { AIPlayer } from './ai/ai-player';
 import { llmBotRegistry } from './ai/llm-bot-player';
+import { ruleBotRegistry } from './ai/rule-bot-player';
 import { getRoomMemory, deleteRoomMemory } from './ai/opponent-memory';
 
 type GameEventCallback = (roomId: string, event: string, data: unknown) => void;
@@ -66,14 +67,15 @@ export class GameController {
 
     // Initialize AI players
     for (const player of this.room.players) {
-      if (player.isAI && !player.isLLMBot) {
-        // Regular rule-based or generic LLM AI
+      if (player.isAI && !player.isLLMBot && !player.isRuleBot) {
+        // Regular anonymous rule-based or generic LLM AI
         this.aiPlayers.set(
           player.id,
           new AIPlayer(player.aiPersonality || 'balanced', player.aiEngineType || 'rule-based')
         );
       }
       // LLM bots are handled via llmBotRegistry in handleAITurn
+      // Rule bots are handled via ruleBotRegistry in handleAITurn
     }
 
     const state = this.initializeGameState();
@@ -728,6 +730,30 @@ export class GameController {
           }
         } catch (err) {
           console.error('[LLMBot] Decision error:', err);
+          if (!this.destroyed) this.processAction(aiPlayer.id, { type: 'fold' });
+        }
+        return;
+      }
+    }
+
+    // Rule bot players: route to ruleBotRegistry
+    if (aiPlayer.isRuleBot && aiPlayer.ruleBotId) {
+      const bot = ruleBotRegistry.get(aiPlayer.ruleBotId as any);
+      if (bot) {
+        try {
+          const context = this.buildAIContext(state, aiPlayer);
+          const action = await bot.makeDecision(context);
+          if (this.destroyed) return;
+          if (isValidAction(state, aiPlayer.id, action)) {
+            this.processAction(aiPlayer.id, action);
+          } else {
+            const callAmt = state.currentBet - aiPlayer.currentBet;
+            if (callAmt === 0) this.processAction(aiPlayer.id, { type: 'check' });
+            else if (aiPlayer.chips >= callAmt) this.processAction(aiPlayer.id, { type: 'call' });
+            else this.processAction(aiPlayer.id, { type: 'fold' });
+          }
+        } catch (err) {
+          console.error('[RuleBot] Decision error:', err);
           if (!this.destroyed) this.processAction(aiPlayer.id, { type: 'fold' });
         }
         return;

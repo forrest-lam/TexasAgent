@@ -9,6 +9,14 @@ export interface LLMBotInfo {
   personality: string;
   busy: boolean;
 }
+
+export interface RuleBotInfo {
+  id: string;
+  name: string;
+  emoji: string;
+  personality: string;
+  busy: boolean;
+}
 import { getSocket, connectSocket } from '../services/socket-service';
 import { useAuthStore } from './auth-store';
 
@@ -39,8 +47,11 @@ interface LobbyState {
   addAI: (personality: string, engineType: string) => void;
   inviteLLMBot: (botId: string) => void;
   removeLLMBot: (botId: string) => void;
+  inviteRuleBot: (botId: string) => void;
+  removeRuleBot: (botId: string) => void;
   startGame: () => void;
   llmBots: LLMBotInfo[];
+  ruleBots: RuleBotInfo[];
 }
 
 export const useLobbyStore = create<LobbyState>((set, get) => ({
@@ -51,6 +62,7 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   isSeated: false,
   isStandingUp: false,
   llmBots: [],
+  ruleBots: [],
 
   connect: () => {
     const token = useAuthStore.getState().token;
@@ -130,6 +142,10 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
       set({ llmBots: bots });
     });
 
+    socket.on('room:rule-bots', (bots: RuleBotInfo[]) => {
+      set({ ruleBots: bots });
+    });
+
     // Request initial LLM bot list
     socket.emit('room:list');
   },
@@ -183,6 +199,16 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   removeLLMBot: (botId: string) => {
     const socket = getSocket();
     socket.emit('room:remove-llm-bot', botId);
+  },
+
+  inviteRuleBot: (botId: string) => {
+    const socket = getSocket();
+    socket.emit('room:invite-rule-bot', botId);
+  },
+
+  removeRuleBot: (botId: string) => {
+    const socket = getSocket();
+    socket.emit('room:remove-rule-bot', botId);
   },
 
   startGame: () => {

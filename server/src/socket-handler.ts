@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { ServerToClientEvents, ClientToServerEvents, PlayerAction, AIPersonality, AIEngineType, RoomConfig, ACTION_TIMEOUT, MIN_PLAYERS } from '@texas-agent/shared';
 import * as RoomManager from './room-manager';
 import { llmBotRegistry } from './ai/llm-bot-player';
+import { ruleBotRegistry } from './ai/rule-bot-player';
 import { GameController } from './game-controller';
 import { getUserById, updateUserChips, updateUserStats } from './user-store';
 
@@ -126,6 +127,12 @@ export function setupSocketHandlers(io: IOServer): void {
         emoji: bot.emoji, personality: bot.personality, busy: bot.isBusy,
       }));
       socket.emit('room:llm-bots', bots as any);
+      // Also push rule bot list
+      const ruleBots = ruleBotRegistry.getAll().map(bot => ({
+        id: bot.botId, name: bot.name,
+        emoji: bot.emoji, personality: bot.personality, busy: bot.isBusy,
+      }));
+      socket.emit('room:rule-bots', ruleBots as any);
     });
 
     // Create room (requires auth)
@@ -344,6 +351,42 @@ export function setupSocketHandlers(io: IOServer): void {
         io.to(roomId).emit('room:updated', updatedRoom);
         broadcastRoomList(io);
         broadcastLLMBotList(io);
+      } catch (err: any) {
+        socket.emit('error', err.message);
+      }
+    });
+
+    // Invite rule bot into room
+    socket.on('room:invite-rule-bot', (botId: string) => {
+      if (!requireAuth('room:invite-rule-bot')) return;
+      const roomId = playerRooms.get(socket.id);
+      if (!roomId) { socket.emit('error', 'Not in a room'); return; }
+      const room = RoomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.ownerId !== socket.id) { socket.emit('error', 'Only the room owner can invite bots'); return; }
+      try {
+        const updatedRoom = RoomManager.inviteRuleBot(roomId, botId);
+        io.to(roomId).emit('room:updated', updatedRoom);
+        broadcastRoomList(io);
+        broadcastRuleBotList(io);
+      } catch (err: any) {
+        socket.emit('error', err.message);
+      }
+    });
+
+    // Remove rule bot from room
+    socket.on('room:remove-rule-bot', (botId: string) => {
+      if (!requireAuth('room:remove-rule-bot')) return;
+      const roomId = playerRooms.get(socket.id);
+      if (!roomId) { socket.emit('error', 'Not in a room'); return; }
+      const room = RoomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.ownerId !== socket.id) { socket.emit('error', 'Only the room owner can remove bots'); return; }
+      try {
+        const updatedRoom = RoomManager.removeRuleBot(roomId, botId);
+        io.to(roomId).emit('room:updated', updatedRoom);
+        broadcastRoomList(io);
+        broadcastRuleBotList(io);
       } catch (err: any) {
         socket.emit('error', err.message);
       }
@@ -728,8 +771,12 @@ function settleChips(roomId: string, gameState: any): void {
   if (!room) return;
 
   for (const player of room.players) {
-    if (player.isAI) continue;
-    const uid = socketUserMap.get(player.id);
+    // Skip anonymous AI players, but handle LLM bots and rule bots
+    if (player.isAI && !player.isLLMBot && !player.isRuleBot) continue;
+
+    // For human players, use the socket→userId mapping
+    // For LLM/rule bots, the player.id IS the user-store id
+    const uid = (player.isLLMBot || player.isRuleBot) ? player.id : socketUserMap.get(player.id);
     if (!uid) continue;
 
     // Find how much this player won
@@ -760,4 +807,15 @@ function broadcastLLMBotList(io: IOServer) {
     busy: bot.isBusy,
   }));
   io.emit('room:llm-bots', bots as any);
+}
+
+function broadcastRuleBotList(io: IOServer) {
+  const bots = ruleBotRegistry.getAll().map(bot => ({
+    id: bot.botId,
+    name: bot.name,
+    emoji: bot.emoji,
+    personality: bot.personality,
+    busy: bot.isBusy,
+  }));
+  io.emit('room:rule-bots', bots as any);
 }

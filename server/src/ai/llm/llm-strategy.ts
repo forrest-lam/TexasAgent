@@ -95,7 +95,8 @@ export class LLMStrategy implements AIStrategy {
     }
 
     const validAction = this.validateAndNormalize(decision, context);
-    console.log(`[LLM:${this.config.model}] ✅ LLM decision: ${validAction.type}${validAction.type === 'raise' ? ` ${validAction.amount}` : ''}`);
+    const reasonStr = decision.reasoning ? ` | Reason: ${decision.reasoning}` : '';
+    console.log(`[LLM:${this.config.model}] ✅ LLM decision: ${validAction.type}${validAction.type === 'raise' ? ` ${validAction.amount}` : ''}${reasonStr}`);
     return validAction;
   }
 

@@ -84,7 +84,7 @@ If action is "raise", amount must be >= ${context.minRaise}
 If action is not "raise", amount should be null`;
 }
 
-export function parseDecisionResponse(response: string): { type: string; amount?: number } | null {
+export function parseDecisionResponse(response: string): { type: string; amount?: number; reasoning?: string } | null {
   const jsonMatch = response.match(/\{[\s\S]*?\}/);
   if (!jsonMatch) return null;
 
@@ -107,5 +107,6 @@ export function parseDecisionResponse(response: string): { type: string; amount?
   return {
     type,
     amount: parsed.amount != null ? Number(parsed.amount) : undefined,
+    reasoning: parsed.reasoning ? String(parsed.reasoning) : undefined,
   };
 }

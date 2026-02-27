@@ -1,7 +1,8 @@
-import { Room, RoomConfig, Player, AIPersonality, AIEngineType, AI_STARTING_CHIPS, LLM_BOT_CONFIGS, LLMBotId } from '@texas-agent/shared';
+import { Room, RoomConfig, Player, AIPersonality, AIEngineType, AI_STARTING_CHIPS, LLM_BOT_CONFIGS, LLMBotId, RULE_BOT_CONFIGS, RuleBotId } from '@texas-agent/shared';
 import { generateId } from '@texas-agent/shared';
 import { getRandomAIName } from './ai/rule-based/personalities';
 import { llmBotRegistry } from './ai/llm-bot-player';
+import { ruleBotRegistry } from './ai/rule-bot-player';
 import { getUserById } from './user-store';
 
 const MAX_ROOMS = 50;
@@ -123,6 +124,10 @@ export function leaveRoom(roomId: string, playerId: string): Room | null {
     const bot = llmBotRegistry.get(leavingPlayer.llmBotId as LLMBotId);
     bot?.releaseRoom(roomId);
   }
+  if (leavingPlayer?.isRuleBot && leavingPlayer.ruleBotId) {
+    const bot = ruleBotRegistry.get(leavingPlayer.ruleBotId as RuleBotId);
+    bot?.releaseRoom(roomId);
+  }
 
   room.players = room.players.filter(p => p.id !== playerId);
   if (room.pendingPlayers) {
@@ -136,8 +141,9 @@ export function leaveRoom(roomId: string, playerId: string): Room | null {
   const humanPlayers = room.players.filter(p => !p.isAI);
   const pendingHumans = (room.pendingPlayers || []).filter(p => !p.isAI);
   if (humanPlayers.length === 0 && pendingHumans.length === 0) {
-    // Release all LLM bots in this room
+    // Release all bots in this room
     releaseAllLLMBots(roomId);
+    releaseAllRuleBots(roomId);
     rooms.delete(roomId);
     return null;
   }
@@ -232,6 +238,62 @@ export function removeLLMBot(roomId: string, botId: string): Room {
   return room;
 }
 
+/**
+ * Invite a named rule-based bot into a room.
+ */
+export function inviteRuleBot(roomId: string, botId: string): Room {
+  const room = rooms.get(roomId);
+  if (!room) throw new Error('Room not found');
+  if (room.players.length >= room.config.maxPlayers) throw new Error('Room is full');
+
+  if (!ruleBotRegistry.isValidBotId(botId)) throw new Error(`Unknown rule bot: ${botId}`);
+
+  const bot = ruleBotRegistry.get(botId as RuleBotId)!;
+
+  if (room.players.find(p => p.ruleBotId === botId)) throw new Error('Bot already in this room');
+  if (bot.isBusy) throw new Error(`${bot.name} is already in another game`);
+
+  const botProfile = getUserById(botId);
+  const chips = botProfile?.chips ?? 2000;
+
+  const seatIndex = getNextAvailableSeat(room);
+  const botPlayer: Player = {
+    id: botId,
+    name: bot.name,
+    chips,
+    cards: [],
+    currentBet: 0,
+    totalBet: 0,
+    isActive: true,
+    isFolded: false,
+    isAllIn: false,
+    isAI: true,
+    isRuleBot: true,
+    ruleBotId: botId,
+    aiPersonality: bot.personality,
+    aiEngineType: 'rule-based',
+    seatIndex,
+  };
+
+  bot.occupyRoom(roomId);
+  room.players.push(botPlayer);
+  return room;
+}
+
+/**
+ * Remove a rule-based bot from a room (before game start).
+ */
+export function removeRuleBot(roomId: string, botId: string): Room {
+  const room = rooms.get(roomId);
+  if (!room) throw new Error('Room not found');
+
+  const bot = ruleBotRegistry.get(botId as RuleBotId);
+  if (bot) bot.releaseRoom(roomId);
+
+  room.players = room.players.filter(p => p.ruleBotId !== botId);
+  return room;
+}
+
 export function getRoom(roomId: string): Room | undefined {
   return rooms.get(roomId);
 }
@@ -239,6 +301,7 @@ export function getRoom(roomId: string): Room | undefined {
 /** Force-delete a room (used when only AI players remain) */
 export function deleteRoom(roomId: string): void {
   releaseAllLLMBots(roomId);
+  releaseAllRuleBots(roomId);
   rooms.delete(roomId);
 }
 
@@ -263,6 +326,13 @@ export function getRoomByPlayerId(playerId: string): Room | undefined {
 /** Release all LLM bots occupying a given room */
 function releaseAllLLMBots(roomId: string) {
   for (const bot of llmBotRegistry.getAll()) {
+    bot.releaseRoom(roomId);
+  }
+}
+
+/** Release all rule-based bots occupying a given room */
+function releaseAllRuleBots(roomId: string) {
+  for (const bot of ruleBotRegistry.getAll()) {
     bot.releaseRoom(roomId);
   }
 }
