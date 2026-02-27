@@ -32,8 +32,10 @@ export class LLMStrategy implements AIStrategy {
 
   async decide(context: AIDecisionContext): Promise<PlayerAction> {
     if (!this.config.apiKey) {
-      console.error('LLM API key not configured, falling back to rule-based engine');
-      return this.fallback.decide(context);
+      console.error(`[LLM:${this.config.model}] API key not configured, falling back to rule-based engine`);
+      const fallbackResult = this.fallback.decide(context);
+      console.log(`[LLM:${this.config.model}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
+      return fallbackResult;
     }
 
     const controller = new AbortController();
@@ -68,25 +70,32 @@ export class LLMStrategy implements AIStrategy {
     clearTimeout(timeoutId);
 
     if (!response || !response.ok) {
-      console.error('LLM API error, falling back to rule-based engine');
-      return this.fallback.decide(context);
+      console.error(`[LLM:${this.config.model}] API error, falling back to rule-based engine`);
+      const fallbackResult = this.fallback.decide(context);
+      console.log(`[LLM:${this.config.model}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
+      return fallbackResult;
     }
 
     const data: any = await response.json().catch(() => null);
     if (!data?.choices?.[0]?.message?.content) {
-      console.error('LLM response parse error, falling back');
-      return this.fallback.decide(context);
+      console.error(`[LLM:${this.config.model}] Response parse error, falling back`);
+      const fallbackResult = this.fallback.decide(context);
+      console.log(`[LLM:${this.config.model}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
+      return fallbackResult;
     }
 
     const content: string = data.choices[0].message.content;
     const decision = parseDecisionResponse(content);
 
     if (!decision) {
-      console.error('Could not parse LLM decision, falling back');
-      return this.fallback.decide(context);
+      console.error(`[LLM:${this.config.model}] Could not parse decision from: ${content.slice(0, 100)}, falling back`);
+      const fallbackResult = this.fallback.decide(context);
+      console.log(`[LLM:${this.config.model}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
+      return fallbackResult;
     }
 
     const validAction = this.validateAndNormalize(decision, context);
+    console.log(`[LLM:${this.config.model}] ✅ LLM decision: ${validAction.type}${validAction.type === 'raise' ? ` ${validAction.amount}` : ''}`);
     return validAction;
   }
 

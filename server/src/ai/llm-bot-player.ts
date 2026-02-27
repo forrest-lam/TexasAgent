@@ -75,7 +75,9 @@ export class LLMBotPlayer {
     const apiKey = this.getApiKey();
     if (!apiKey) {
       console.warn(`[LLMBot:${this.name}] No API key configured, using fallback`);
-      return this.fallback.decide(context);
+      const fallbackResult = this.fallback.decide(context);
+      console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
+      return fallbackResult;
     }
 
     const controller = new AbortController();
@@ -112,7 +114,9 @@ export class LLMBotPlayer {
 
       if (!response.ok) {
         console.error(`[LLMBot:${this.name}] API error ${response.status}, using fallback`);
-        return this.fallback.decide(context);
+        const fallbackResult = this.fallback.decide(context);
+        console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
+        return fallbackResult;
       }
 
       const data: any = await response.json().catch(() => null);
@@ -120,16 +124,22 @@ export class LLMBotPlayer {
 
       if (!content) {
         console.error(`[LLMBot:${this.name}] Empty response, using fallback`);
-        return this.fallback.decide(context);
+        const fallbackResult = this.fallback.decide(context);
+        console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
+        return fallbackResult;
       }
 
       const decision = parseDecisionResponse(content);
       if (!decision) {
         console.error(`[LLMBot:${this.name}] Could not parse decision from: ${content.slice(0, 100)}, using fallback`);
-        return this.fallback.decide(context);
+        const fallbackResult = this.fallback.decide(context);
+        console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
+        return fallbackResult;
       }
 
-      return this.validateAndNormalize(decision, context);
+      const result = this.validateAndNormalize(decision, context);
+      console.log(`[LLMBot:${this.name}] ✅ LLM decision: ${result.type}${result.type === 'raise' ? ` ${result.amount}` : ''}`);
+      return result;
 
     } catch (err: any) {
       clearTimeout(timeoutId);
@@ -138,7 +148,9 @@ export class LLMBotPlayer {
       } else {
         console.error(`[LLMBot:${this.name}] Unexpected error: ${err?.message}, using fallback`);
       }
-      return this.fallback.decide(context);
+      const fallbackResult = this.fallback.decide(context);
+      console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
+      return fallbackResult;
     }
   }
 
