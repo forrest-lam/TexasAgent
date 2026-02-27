@@ -27,6 +27,8 @@ export interface Player {
   isFolded: boolean;
   isAllIn: boolean;
   isAI: boolean;
+  isLLMBot?: boolean;       // true for the named LLM bot accounts (DeepSeek/Kimi/MiniMax/Qwen)
+  llmBotId?: string;        // matches the id in LLM_BOT_CONFIGS
   aiPersonality?: AIPersonality;
   aiEngineType?: AIEngineType;
   seatIndex: number;
@@ -139,6 +141,7 @@ export interface UserProfile {
   id: string;
   username: string;
   chips: number;
+  isLLMBot?: boolean;       // system LLM bot account
   llmConfig?: {
     apiKey: string;
     apiBaseUrl: string;
@@ -161,6 +164,45 @@ export interface AuthResponse {
 
 export const DEFAULT_USER_CHIPS = 2000;
 export const AI_STARTING_CHIPS = 1000;
+export const LLM_BOT_STARTING_CHIPS = 5000;
+
+/** Built-in LLM bot definitions */
+export const LLM_BOT_CONFIGS = [
+  {
+    id: 'llm-bot-deepseek',
+    name: 'DeepSeek',
+    model: 'deepseek-v3',
+    apiBaseUrl: 'https://api.deepseek.com/v1',
+    personality: 'aggressive' as AIPersonality,
+    emoji: '🤖',
+  },
+  {
+    id: 'llm-bot-kimi',
+    name: 'Kimi',
+    model: 'moonshot-v1-8k',
+    apiBaseUrl: 'https://api.moonshot.cn/v1',
+    personality: 'balanced' as AIPersonality,
+    emoji: '🌙',
+  },
+  {
+    id: 'llm-bot-minimax',
+    name: 'MiniMax',
+    model: 'MiniMax-M1',
+    apiBaseUrl: 'https://api.minimaxi.chat/v1',
+    personality: 'conservative' as AIPersonality,
+    emoji: '⚡',
+  },
+  {
+    id: 'llm-bot-qwen',
+    name: 'Qwen',
+    model: 'qwen-plus',
+    apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    personality: 'balanced' as AIPersonality,
+    emoji: '☁️',
+  },
+] as const;
+
+export type LLMBotId = (typeof LLM_BOT_CONFIGS)[number]['id'];
 
 // Socket event types
 export interface ServerToClientEvents {
@@ -179,6 +221,7 @@ export interface ServerToClientEvents {
   'user:updated': (user: AuthResponse['user']) => void;
   'error': (message: string) => void;
   'chat:message': (data: { playerId: string; playerName: string; message: string; timestamp: number }) => void;
+  'room:llm-bots': (bots: Array<{ id: string; name: string; model: string; chips: number; busy: boolean }>) => void;
   'room:reaction': (data: { fromId: string; fromName: string; toId: string; toName: string; emoji: string }) => void;
 }
 
@@ -191,6 +234,8 @@ export interface ClientToServerEvents {
   'room:stand': () => void;
   'room:leave': () => void;
   'room:add-ai': (personality: AIPersonality, engineType: AIEngineType) => void;
+  'room:invite-llm-bot': (botId: string) => void;
+  'room:remove-llm-bot': (botId: string) => void;
   'game:start': () => void;
   'game:action': (action: PlayerAction) => void;
   'game:resync': () => void;

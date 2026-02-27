@@ -7,6 +7,7 @@ import {
   Deck, generateId, ACTION_TIMEOUT,
 } from '@texas-agent/shared';
 import { AIPlayer } from './ai/ai-player';
+import { llmBotRegistry } from './ai/llm-bot-player';
 
 type GameEventCallback = (roomId: string, event: string, data: unknown) => void;
 
@@ -64,12 +65,14 @@ export class GameController {
 
     // Initialize AI players
     for (const player of this.room.players) {
-      if (player.isAI) {
+      if (player.isAI && !player.isLLMBot) {
+        // Regular rule-based or generic LLM AI
         this.aiPlayers.set(
           player.id,
           new AIPlayer(player.aiPersonality || 'balanced', player.aiEngineType || 'rule-based')
         );
       }
+      // LLM bots are handled via llmBotRegistry in handleAITurn
     }
 
     const state = this.initializeGameState();
@@ -634,8 +637,71 @@ export class GameController {
     }
   }
 
-  private async handleAITurn(state: GameState, aiPlayer: Player): Promise<void> {
+  private buildAIContext(state: GameState, player: Player): import('@texas-agent/shared').AIDecisionContext {
+    const activePlayers = state.players.filter(p => !p.isFolded && p.isActive);
+    const n = activePlayers.length;
+    const dealerIdx = activePlayers.findIndex(p => p.id === state.players[state.dealerIndex]?.id);
+    const myIdx = activePlayers.findIndex(p => p.id === player.id);
+    let position: 'early' | 'middle' | 'late' | 'blinds' = 'middle';
+    if (myIdx !== -1 && dealerIdx !== -1) {
+      const rel = (myIdx - dealerIdx + n) % n;
+      if (rel <= 1 && n > 2) position = 'blinds';
+      else if (rel <= Math.ceil(n / 3)) position = 'early';
+      else if (rel <= Math.ceil((2 * n) / 3)) position = 'middle';
+      else position = 'late';
+    }
+    return {
+      playerId: player.id,
+      hand: player.cards,
+      communityCards: state.communityCards,
+      pot: state.pot,
+      currentBet: state.currentBet,
+      playerBet: player.currentBet,
+      playerChips: player.chips,
+      minRaise: state.minRaise,
+      bigBlind: state.bigBlind,
+      phase: state.phase,
+      numActivePlayers: activePlayers.length,
+      position,
+      personality: player.aiPersonality || 'balanced',
+      players: state.players.map(p => ({
+        id: p.id,
+        chips: p.chips,
+        currentBet: p.currentBet,
+        isFolded: p.isFolded,
+        isAllIn: p.isAllIn,
+        isAI: p.isAI,
+      })),
+    };
+  }
+
+    private async handleAITurn(state: GameState, aiPlayer: Player): Promise<void> {
     if (this.destroyed) return;
+
+    // LLM bot players: route to llmBotRegistry
+    if (aiPlayer.isLLMBot && aiPlayer.llmBotId) {
+      const bot = llmBotRegistry.get(aiPlayer.llmBotId as any);
+      if (bot) {
+        try {
+          const context = this.buildAIContext(state, aiPlayer);
+          const action = await bot.makeDecision(context);
+          if (this.destroyed) return;
+          if (isValidAction(state, aiPlayer.id, action)) {
+            this.processAction(aiPlayer.id, action);
+          } else {
+            const callAmt = state.currentBet - aiPlayer.currentBet;
+            if (callAmt === 0) this.processAction(aiPlayer.id, { type: 'check' });
+            else if (aiPlayer.chips >= callAmt) this.processAction(aiPlayer.id, { type: 'call' });
+            else this.processAction(aiPlayer.id, { type: 'fold' });
+          }
+        } catch (err) {
+          console.error('[LLMBot] Decision error:', err);
+          if (!this.destroyed) this.processAction(aiPlayer.id, { type: 'fold' });
+        }
+        return;
+      }
+    }
+
     const ai = this.aiPlayers.get(aiPlayer.id);
     if (!ai) {
       this.processAction(aiPlayer.id, { type: 'fold' });

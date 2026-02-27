@@ -1,5 +1,14 @@
 import { create } from 'zustand';
 import { Room, RoomConfig } from '@texas-agent/shared';
+
+export interface LLMBotInfo {
+  id: string;
+  name: string;
+  model: string;
+  emoji: string;
+  personality: string;
+  busy: boolean;
+}
 import { getSocket, connectSocket } from '../services/socket-service';
 import { useAuthStore } from './auth-store';
 
@@ -28,7 +37,10 @@ interface LobbyState {
   standUp: () => void;
   leaveRoom: () => void;
   addAI: (personality: string, engineType: string) => void;
+  inviteLLMBot: (botId: string) => void;
+  removeLLMBot: (botId: string) => void;
   startGame: () => void;
+  llmBots: LLMBotInfo[];
 }
 
 export const useLobbyStore = create<LobbyState>((set, get) => ({
@@ -38,6 +50,7 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   isSpectating: false,
   isSeated: false,
   isStandingUp: false,
+  llmBots: [],
 
   connect: () => {
     const token = useAuthStore.getState().token;
@@ -112,6 +125,13 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     socket.on('error', (msg) => {
       console.error('Server error:', msg);
     });
+
+    socket.on('room:llm-bots', (bots: LLMBotInfo[]) => {
+      set({ llmBots: bots });
+    });
+
+    // Request initial LLM bot list
+    socket.emit('room:list');
   },
 
   refreshRooms: () => {
@@ -153,6 +173,16 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   addAI: (personality: string, engineType: string) => {
     const socket = getSocket();
     socket.emit('room:add-ai', personality as any, engineType as any);
+  },
+
+  inviteLLMBot: (botId: string) => {
+    const socket = getSocket();
+    socket.emit('room:invite-llm-bot', botId);
+  },
+
+  removeLLMBot: (botId: string) => {
+    const socket = getSocket();
+    socket.emit('room:remove-llm-bot', botId);
   },
 
   startGame: () => {

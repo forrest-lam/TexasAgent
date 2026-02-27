@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { ServerToClientEvents, ClientToServerEvents, PlayerAction, AIPersonality, AIEngineType, RoomConfig, ACTION_TIMEOUT, MIN_PLAYERS } from '@texas-agent/shared';
 import * as RoomManager from './room-manager';
+import { llmBotRegistry } from './ai/llm-bot-player';
 import { GameController } from './game-controller';
 import { getUserById, updateUserChips, updateUserStats } from './user-store';
 
@@ -705,4 +706,16 @@ function settleChips(roomId: string, gameState: any): void {
 
 function broadcastRoomList(io: IOServer): void {
   io.emit('room:list', RoomManager.getRoomList());
+}
+
+function broadcastLLMBotList(io: IOServer) {
+  const bots = llmBotRegistry.getAll().map(bot => ({
+    id: bot.botId,
+    name: bot.name,
+    model: bot.model,
+    emoji: bot.emoji,
+    personality: bot.personality,
+    busy: bot.isBusy,
+  }));
+  io.emit('room:llm-bots', bots as any);
 }

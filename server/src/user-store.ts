@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
-import { UserProfile, DEFAULT_USER_CHIPS } from '@texas-agent/shared';
+import { UserProfile, DEFAULT_USER_CHIPS, LLM_BOT_CONFIGS, LLM_BOT_STARTING_CHIPS } from '@texas-agent/shared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,10 +40,44 @@ function saveUsers() {
   fs.writeFileSync(USERS_FILE, JSON.stringify(obj, null, 2));
 }
 
+/** Ensure all LLM bot accounts exist in the user store */
+function ensureLLMBotAccounts() {
+  let changed = false;
+  for (const cfg of LLM_BOT_CONFIGS) {
+    if (!users.has(cfg.id)) {
+      const bot: StoredUser = {
+        id: cfg.id,
+        username: cfg.name,
+        passwordHash: '', // bots cannot login
+        chips: LLM_BOT_STARTING_CHIPS,
+        isLLMBot: true,
+        stats: { gamesPlayed: 0, gamesWon: 0, totalEarnings: 0 },
+        createdAt: Date.now(),
+      };
+      users.set(cfg.id, bot);
+      changed = true;
+      console.log(`[UserStore] Created LLM bot account: ${cfg.name} (${cfg.id})`);
+    } else {
+      // Ensure isLLMBot flag is set on existing accounts
+      const existing = users.get(cfg.id)!;
+      if (!existing.isLLMBot) {
+        existing.isLLMBot = true;
+        changed = true;
+      }
+    }
+  }
+  if (changed) saveUsers();
+}
+
 // Load on startup
 loadUsers();
+ensureLLMBotAccounts();
 
 export function createUser(username: string, password: string): UserProfile | null {
+  // Prevent registering with LLM bot names
+  for (const cfg of LLM_BOT_CONFIGS) {
+    if (cfg.name.toLowerCase() === username.toLowerCase()) return null;
+  }
   // Check duplicate (case-insensitive)
   for (const u of users.values()) {
     if (u.username.toLowerCase() === username.toLowerCase()) return null;
@@ -69,6 +103,8 @@ export function createUser(username: string, password: string): UserProfile | nu
 export function authenticateUser(username: string, password: string): UserProfile | null {
   for (const u of users.values()) {
     if (u.username.toLowerCase() === username.toLowerCase()) {
+      // LLM bots cannot authenticate
+      if (u.isLLMBot) return null;
       if (bcrypt.compareSync(password, u.passwordHash)) {
         return toProfile(u);
       }
@@ -127,4 +163,11 @@ function toProfile(u: StoredUser): UserProfile {
 
 export function getAllUsers(): UserProfile[] {
   return Array.from(users.values()).map(toProfile);
+}
+
+/** Get all LLM bot profiles */
+export function getLLMBotProfiles(): UserProfile[] {
+  return Array.from(users.values())
+    .filter(u => u.isLLMBot)
+    .map(toProfile);
 }
