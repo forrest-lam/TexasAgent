@@ -121,10 +121,10 @@ export class LocalGameEngine {
     const canUseLLM = !!(this.options.serverUrl && this.options.authToken);
     const selectedLLMBots = canUseLLM ? pickRandomLLMBots(maxLLM) : [];
 
-    // Pick random named rule bots (up to maxRuleBots, default 2) if server is available
+    // Pick random named rule bots (up to maxRuleBots, default 2)
+    // Named rule bots always work — they fallback to local rule-based strategy if API is unavailable
     const maxRule = this.options.maxRuleBots ?? 2;
-    const canUseRuleAPI = !!(this.options.serverUrl && this.options.authToken);
-    const selectedRuleBots = canUseRuleAPI ? pickRandomRuleBots(maxRule) : [];
+    const selectedRuleBots = pickRandomRuleBots(maxRule);
 
     let seatIdx = 1;
 
