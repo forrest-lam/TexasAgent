@@ -33,7 +33,7 @@ export class LLMStrategy implements AIStrategy {
   async decide(context: AIDecisionContext): Promise<PlayerAction> {
     if (!this.config.apiKey) {
       console.error(`[LLM:${this.config.model}] API key not configured, falling back to rule-based engine`);
-      const fallbackResult = this.fallback.decide(context);
+      const fallbackResult = await this.fallback.decide(context);
       console.log(`[LLM:${this.config.model}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
       return fallbackResult;
     }
@@ -71,7 +71,7 @@ export class LLMStrategy implements AIStrategy {
 
     if (!response || !response.ok) {
       console.error(`[LLM:${this.config.model}] API error, falling back to rule-based engine`);
-      const fallbackResult = this.fallback.decide(context);
+      const fallbackResult = await this.fallback.decide(context);
       console.log(`[LLM:${this.config.model}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
       return fallbackResult;
     }
@@ -79,7 +79,7 @@ export class LLMStrategy implements AIStrategy {
     const data: any = await response.json().catch(() => null);
     if (!data?.choices?.[0]?.message?.content) {
       console.error(`[LLM:${this.config.model}] Response parse error, falling back`);
-      const fallbackResult = this.fallback.decide(context);
+      const fallbackResult = await this.fallback.decide(context);
       console.log(`[LLM:${this.config.model}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
       return fallbackResult;
     }
@@ -89,7 +89,7 @@ export class LLMStrategy implements AIStrategy {
 
     if (!decision) {
       console.error(`[LLM:${this.config.model}] Could not parse decision from: ${content.slice(0, 100)}, falling back`);
-      const fallbackResult = this.fallback.decide(context);
+      const fallbackResult = await this.fallback.decide(context);
       console.log(`[LLM:${this.config.model}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
       return fallbackResult;
     }

@@ -7,7 +7,7 @@ export function buildDecisionPrompt(context: AIDecisionContext): string {
 
   const opponentInfo = context.players
     .filter(p => p.id !== context.playerId && !p.isFolded)
-    .map((p, i) => `  Player ${i + 1}: chips=${p.chips}, bet=${p.currentBet}${p.isAllIn ? ' (ALL-IN)' : ''}`)
+    .map((p, i) => `  Player ${i + 1} (${p.name || 'Unknown'}): chips=${p.chips}, bet=${p.currentBet}${p.isAllIn ? ' (ALL-IN)' : ''}`)
     .join('\n');
 
   const availableActions: string[] = [];
@@ -15,6 +15,40 @@ export function buildDecisionPrompt(context: AIDecisionContext): string {
   else availableActions.push('"fold"', '"call"');
   availableActions.push('"raise"');
   if (context.playerChips > 0) availableActions.push('"all-in"');
+
+  // Build hand history section
+  let handHistorySection = '';
+  if (context.handHistory && context.handHistory.length > 0) {
+    const lines = context.handHistory.map(h =>
+      `  [${h.phase}] ${h.playerName}: ${h.action}${h.amount ? ` ${h.amount}` : ''} (pot: ${h.potSize})`
+    );
+    handHistorySection = `\nACTION HISTORY THIS HAND:\n${lines.join('\n')}\n`;
+  }
+
+  // Build opponent profiles section
+  let profilesSection = '';
+  if (context.opponentProfiles && context.opponentProfiles.length > 0) {
+    const profiles = context.opponentProfiles.map(op => {
+      const stats = [
+        `Style: ${op.style}`,
+        `Hands: ${op.handsPlayed}`,
+        `Win%: ${(op.winRate * 100).toFixed(0)}%`,
+        `VPIP: ${(op.vpip * 100).toFixed(0)}%`,
+        `PFR: ${(op.pfr * 100).toFixed(0)}%`,
+        `PostflopAgg: ${(op.postflopAgg * 100).toFixed(0)}%`,
+        `FoldToBet: ${(op.foldToBet * 100).toFixed(0)}%`,
+        `AvgBet/Pot: ${op.avgBetSize.toFixed(2)}`,
+      ].join(', ');
+      const tips = op.exploitTips.length > 0
+        ? `\n    Exploit: ${op.exploitTips.join('; ')}`
+        : '';
+      const recent = op.recentActions !== 'none'
+        ? `\n    Recent: ${op.recentActions}`
+        : '';
+      return `  ${op.name}: ${stats}${tips}${recent}`;
+    });
+    profilesSection = `\nOPPONENT BEHAVIORAL PROFILES (based on ${context.opponentProfiles[0]?.handsPlayed || 0}+ hands of history):\n${profiles.join('\n')}\n`;
+  }
 
   return `You are an expert Texas Hold'em poker player with a ${context.personality} play style.
 
@@ -31,13 +65,14 @@ CURRENT GAME STATE:
 - Your position: ${context.position}
 - Active players: ${context.numActivePlayers}
 
-OPPONENTS:
+OPPONENTS (current state):
 ${opponentInfo}
-
+${handHistorySection}${profilesSection}
 PERSONALITY: ${context.personality}
 ${context.personality === 'conservative' ? '- Play tight, fold marginal hands, only raise with strong hands' : ''}
 ${context.personality === 'aggressive' ? '- Play loose-aggressive, apply pressure, bluff occasionally, raise frequently' : ''}
 ${context.personality === 'balanced' ? '- Play solid TAG style, mix raises and calls, bluff selectively based on position' : ''}
+${profilesSection ? '- IMPORTANT: Use the opponent profiles above to make exploitative adjustments. Target weak players and avoid traps from strong ones.' : ''}
 
 Available actions: ${availableActions.join(', ')}
 

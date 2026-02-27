@@ -8,6 +8,7 @@ import {
 } from '@texas-agent/shared';
 import { AIPlayer } from './ai/ai-player';
 import { llmBotRegistry } from './ai/llm-bot-player';
+import { getRoomMemory, deleteRoomMemory } from './ai/opponent-memory';
 
 type GameEventCallback = (roomId: string, event: string, data: unknown) => void;
 
@@ -180,6 +181,7 @@ export class GameController {
     }
     this.pendingTimeoutAction = null;
     this.aiPlayers.clear();
+    deleteRoomMemory(this.room.id);
   }
 
   /** Mark a player as standing up — they will be removed before the next hand */
@@ -262,6 +264,9 @@ export class GameController {
     if (state.players[sbIndex]) state.players[sbIndex].isSmallBlind = true;
     if (state.players[bbIndex]) state.players[bbIndex].isBigBlind = true;
 
+    // Start new hand in opponent memory
+    getRoomMemory(this.room.id).startHand(state.round);
+
     return state;
   }
 
@@ -337,6 +342,17 @@ export class GameController {
         if (!state.actedThisRound.includes(playerId)) {
           state.actedThisRound.push(playerId);
         }
+      }
+
+      // Record action to opponent memory for LLM bots
+      const actingPlayer = state.players.find(p => p.id === playerId);
+      if (actingPlayer) {
+        const mem = getRoomMemory(this.room.id);
+        mem.recordAction(
+          playerId, actingPlayer.name, action.type,
+          action.amount, state.pot, state.phase,
+          prevCurrentBet, actingPlayer.currentBet,
+        );
       }
 
       // Broadcast the action
@@ -487,6 +503,18 @@ export class GameController {
         }
       }
     }
+
+    // Finalize hand memory: merge Layer 2 actions into Layer 1 global profiles
+    const mem = getRoomMemory(this.room.id);
+    const winnerNames = new Set(
+      (state.winners || [])
+        .map(w => state.players.find(p => p.id === w.playerId)?.name)
+        .filter((n): n is string => !!n)
+    );
+    const participantNames = state.players
+      .filter(p => p.isActive || p.isFolded)
+      .map(p => p.name);
+    mem.finalizeHand(winnerNames, participantNames);
 
     // Sync updated chips back to room.players so the next hand starts with correct values
     for (const gp of state.players) {
@@ -650,6 +678,7 @@ export class GameController {
       else if (rel <= Math.ceil((2 * n) / 3)) position = 'middle';
       else position = 'late';
     }
+    const mem = getRoomMemory(this.room.id);
     return {
       playerId: player.id,
       hand: player.cards,
@@ -666,12 +695,15 @@ export class GameController {
       personality: player.aiPersonality || 'balanced',
       players: state.players.map(p => ({
         id: p.id,
+        name: p.name,
         chips: p.chips,
         currentBet: p.currentBet,
         isFolded: p.isFolded,
         isAllIn: p.isAllIn,
         isAI: p.isAI,
       })),
+      handHistory: mem.getHandActionLog(),
+      opponentProfiles: mem.getOpponentSummaries(player.name),
     };
   }
 

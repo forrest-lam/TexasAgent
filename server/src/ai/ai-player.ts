@@ -58,6 +58,7 @@ export class AIPlayer {
       personality: this.personality,
       players: state.players.map(p => ({
         id: p.id,
+        name: p.name,
         chips: p.chips,
         currentBet: p.currentBet,
         isFolded: p.isFolded,

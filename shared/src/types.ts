@@ -128,11 +128,35 @@ export interface AIDecisionContext {
   personality: AIPersonality;
   players: {
     id: string;
+    name?: string;
     chips: number;
     currentBet: number;
     isFolded: boolean;
     isAllIn: boolean;
     isAI: boolean;
+  }[];
+  /** Current hand's action history (all players' actions so far this hand) */
+  handHistory?: {
+    playerId: string;
+    playerName: string;
+    action: ActionType;
+    amount?: number;
+    potSize: number;
+    phase: GamePhase;
+  }[];
+  /** Opponent behavioral profiles based on historical data */
+  opponentProfiles?: {
+    name: string;
+    style: string;
+    handsPlayed: number;
+    winRate: number;
+    vpip: number;
+    pfr: number;
+    postflopAgg: number;
+    foldToBet: number;
+    avgBetSize: number;
+    recentActions: string;
+    exploitTips: string[];
   }[];
 }
 

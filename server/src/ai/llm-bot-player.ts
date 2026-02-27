@@ -75,7 +75,7 @@ export class LLMBotPlayer {
     const apiKey = this.getApiKey();
     if (!apiKey) {
       console.warn(`[LLMBot:${this.name}] No API key configured, using fallback`);
-      const fallbackResult = this.fallback.decide(context);
+      const fallbackResult = await this.fallback.decide(context);
       console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
       return fallbackResult;
     }
@@ -114,7 +114,7 @@ export class LLMBotPlayer {
 
       if (!response.ok) {
         console.error(`[LLMBot:${this.name}] API error ${response.status}, using fallback`);
-        const fallbackResult = this.fallback.decide(context);
+        const fallbackResult = await this.fallback.decide(context);
         console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
         return fallbackResult;
       }
@@ -124,7 +124,7 @@ export class LLMBotPlayer {
 
       if (!content) {
         console.error(`[LLMBot:${this.name}] Empty response, using fallback`);
-        const fallbackResult = this.fallback.decide(context);
+        const fallbackResult = await this.fallback.decide(context);
         console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
         return fallbackResult;
       }
@@ -132,7 +132,7 @@ export class LLMBotPlayer {
       const decision = parseDecisionResponse(content);
       if (!decision) {
         console.error(`[LLMBot:${this.name}] Could not parse decision from: ${content.slice(0, 100)}, using fallback`);
-        const fallbackResult = this.fallback.decide(context);
+        const fallbackResult = await this.fallback.decide(context);
         console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
         return fallbackResult;
       }
@@ -148,7 +148,7 @@ export class LLMBotPlayer {
       } else {
         console.error(`[LLMBot:${this.name}] Unexpected error: ${err?.message}, using fallback`);
       }
-      const fallbackResult = this.fallback.decide(context);
+      const fallbackResult = await this.fallback.decide(context);
       console.log(`[LLMBot:${this.name}] ⚠️ Fallback decision: ${fallbackResult.type}${fallbackResult.type === 'raise' ? ` ${fallbackResult.amount}` : ''}`);
       return fallbackResult;
     }
