@@ -68,7 +68,7 @@ export default function GiftFlyAnimation({ reactions, positions, ordered }: Gift
                 animate={{ opacity: [0, 1, 1, 0], scale: [0.2, 2.0, 2.4, 2.8] }}
                 transition={{ duration: 0.7, delay: 0.82, ease: 'easeOut' }}
               >
-                {reaction.emoji === '🍅' ? '🫙' : '🍳'}
+                {reaction.emoji === '🍅' ? '🍅' : '🍳'}
               </motion.div>
             )}
 
