@@ -80,6 +80,7 @@ export const locales: Record<Locale, Record<string, string>> = {
     'log.gameRestarted': '🔄 Game restarted!',
     'log.wins': '🏆 {name} wins ${amount} ({hand})',
     'log.action': '{name}: {action}',
+    'log.playerLeft': '🚪 {name} left the table (out of chips)',
 
     // Game over / restart
     'game.over': 'Game Over',
@@ -209,6 +210,7 @@ export const locales: Record<Locale, Record<string, string>> = {
     'log.gameRestarted': '🔄 游戏已重新开始！',
     'log.wins': '🏆 {name} 赢得 ${amount}（{hand}）',
     'log.action': '{name}：{action}',
+    'log.playerLeft': '🚪 {name} 离开了牌桌（筹码耗尽）',
 
     // Game over / restart
     'game.over': '游戏结束',

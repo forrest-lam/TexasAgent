@@ -455,6 +455,18 @@ export class LocalGameEngine {
   }
 
   private startNextHand(): void {
+    // Remove AI bots with no chips (they "leave the table")
+    const bustedBots = this.state.players.filter(p => p.isAI && p.chips <= 0);
+    if (bustedBots.length > 0) {
+      for (const bot of bustedBots) {
+        this.onLog({ key: 'log.playerLeft', params: { name: bot.name } });
+        // Clean up bot maps
+        this.llmBotMap.delete(bot.id);
+        this.ruleBotMap.delete(bot.id);
+      }
+      this.state.players = this.state.players.filter(p => !(p.isAI && p.chips <= 0));
+    }
+
     const alive = this.state.players.filter(p => p.chips > 0);
     if (alive.length < 2) {
       this.onLog({ key: 'log.gameOver' });

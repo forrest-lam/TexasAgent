@@ -589,8 +589,8 @@ export class GameController {
       this.emitEvent(this.room.id, 'room:updated', this.room);
     }
 
-    // Remove players with no chips
-    const activePlayers = this.room.players.filter(p => p.chips > 0 || p.isAI);
+    // Remove players with no chips (including AI bots)
+    const activePlayers = this.room.players.filter(p => p.chips > 0);
 
     // Check if only AI players remain — if so, set room to waiting and notify
     const humanPlayers = this.room.players.filter(p => !p.isAI);
