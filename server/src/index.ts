@@ -296,6 +296,39 @@ app.post('/api/llm/bot-decision', authMiddleware, async (req, res) => {
   }
 });
 
+// --- Rule bot decision for single-player mode ---
+app.post('/api/rule-bot/decision', authMiddleware, async (req, res) => {
+  const { botId, context } = req.body;
+  if (!botId || !context) {
+    res.status(400).json({ error: 'botId and context are required' });
+    return;
+  }
+
+  const { ruleBotRegistry } = await import('./ai/rule-bot-player');
+  if (!ruleBotRegistry.isValidBotId(botId)) {
+    res.status(400).json({ error: `Unknown rule bot id: ${botId}` });
+    return;
+  }
+
+  const bot = ruleBotRegistry.get(botId as any);
+  if (!bot) {
+    res.status(500).json({ error: 'Bot not found' });
+    return;
+  }
+
+  const startTime = Date.now();
+  console.log(`[RuleBot Decision] botId=${botId} name=${bot.name} phase=${context.phase}`);
+
+  try {
+    const decision = await bot.makeDecision(context);
+    console.log(`[RuleBot Decision] ${bot.name} decided: ${decision.type}${decision.amount ? ` ${decision.amount}` : ''} elapsed=${Date.now() - startTime}ms`);
+    res.json({ action: decision });
+  } catch (err: any) {
+    console.error(`[RuleBot Decision] Error: ${err?.message}`);
+    res.status(500).json({ error: 'Decision failed', action: { type: 'fold' } });
+  }
+});
+
 // Update chips (for single player mode settlement)
 app.put('/api/user/chips', authMiddleware, (req, res) => {
   const { chips } = req.body;

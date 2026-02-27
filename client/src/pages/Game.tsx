@@ -197,6 +197,7 @@ export default function Game() {
       serverUrl: API_BASE,
       authToken: authToken || undefined,
       maxLLMBots: 2,
+      maxRuleBots: 2,
     };
     localEngine.current = new LocalGameEngine(
       config,

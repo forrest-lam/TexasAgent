@@ -1,6 +1,6 @@
 import {
   GameState, Player, PlayerAction, RoomConfig, AIPersonality, AIEngineType,
-  Deck, generateId, AI_STARTING_CHIPS, LLM_BOT_CONFIGS,
+  Deck, generateId, AI_STARTING_CHIPS, LLM_BOT_CONFIGS, RULE_BOT_CONFIGS,
   getNextActivePlayerIndex, getSmallBlindIndex, getBigBlindIndex,
   isValidAction, applyAction, advancePhase, resetBetsForNewRound,
   determineWinners, calculateSidePots, getPlayersInHand,
@@ -17,6 +17,12 @@ function pickRandomLLMBots(max: number): typeof LLM_BOT_CONFIGS[number][] {
   return shuffled.slice(0, max);
 }
 
+/** Pick up to `max` random named rule bots from the config list */
+function pickRandomRuleBots(max: number): typeof RULE_BOT_CONFIGS[number][] {
+  const shuffled = [...RULE_BOT_CONFIGS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, max);
+}
+
 export interface LocalGameOptions {
   /** Server base URL for LLM bot API calls */
   serverUrl?: string;
@@ -24,6 +30,8 @@ export interface LocalGameOptions {
   authToken?: string;
   /** Max number of LLM bots to include (0-2, default 2) */
   maxLLMBots?: number;
+  /** Max number of named rule bots (Blaze/Shield/Sage) to include (0-3, default 2) */
+  maxRuleBots?: number;
 }
 
 export class LocalGameEngine {
@@ -40,6 +48,8 @@ export class LocalGameEngine {
   private options: LocalGameOptions;
   /** Map player id → LLM bot config id for LLM bot players */
   private llmBotMap: Map<string, string> = new Map();
+  /** Map player id → Rule bot config id for named rule bot players */
+  private ruleBotMap: Map<string, string> = new Map();
 
   constructor(config: RoomConfig, onStateChange: StateCallback, onLog: LogCallback, humanChips?: number, options?: LocalGameOptions) {
     this.config = config;
@@ -106,14 +116,20 @@ export class LocalGameEngine {
 
     // Pick random LLM bots (up to maxLLMBots, default 2) if server is available
     this.llmBotMap.clear();
+    this.ruleBotMap.clear();
     const maxLLM = this.options.maxLLMBots ?? 2;
     const canUseLLM = !!(this.options.serverUrl && this.options.authToken);
-    const selectedBots = canUseLLM ? pickRandomLLMBots(maxLLM) : [];
+    const selectedLLMBots = canUseLLM ? pickRandomLLMBots(maxLLM) : [];
+
+    // Pick random named rule bots (up to maxRuleBots, default 2) if server is available
+    const maxRule = this.options.maxRuleBots ?? 2;
+    const canUseRuleAPI = !!(this.options.serverUrl && this.options.authToken);
+    const selectedRuleBots = canUseRuleAPI ? pickRandomRuleBots(maxRule) : [];
 
     let seatIdx = 1;
 
     // Add LLM bot players first
-    for (const bot of selectedBots) {
+    for (const bot of selectedLLMBots) {
       const playerId = `llm-${bot.id}`;
       this.llmBotMap.set(playerId, bot.id);
       players.push({
@@ -135,8 +151,32 @@ export class LocalGameEngine {
       });
     }
 
-    // Fill remaining seats with rule-based bots
-    const ruleCount = this.config.aiCount - selectedBots.length;
+    // Add named rule bots (Blaze/Shield/Sage)
+    for (const bot of selectedRuleBots) {
+      const playerId = `rulebot-${bot.id}`;
+      this.ruleBotMap.set(playerId, bot.id);
+      players.push({
+        id: playerId,
+        name: `${bot.emoji} ${bot.name}`,
+        chips: AI_STARTING_CHIPS,
+        cards: [],
+        currentBet: 0,
+        totalBet: 0,
+        isActive: true,
+        isFolded: false,
+        isAllIn: false,
+        isAI: true,
+        isRuleBot: true,
+        ruleBotId: bot.id,
+        aiPersonality: bot.personality,
+        aiEngineType: 'rule-based',
+        seatIndex: seatIdx++,
+      });
+    }
+
+    // Fill remaining seats with anonymous rule-based bots
+    const namedCount = selectedLLMBots.length + selectedRuleBots.length;
+    const ruleCount = this.config.aiCount - namedCount;
     for (let i = 0; i < ruleCount; i++) {
       players.push({
         id: `ai-${i}`,
@@ -513,14 +553,21 @@ export class LocalGameEngine {
   }
 
   private makeAIDecision(player: Player): void {
-    const botId = this.llmBotMap.get(player.id);
-    if (botId && this.options.serverUrl && this.options.authToken) {
+    const llmBotId = this.llmBotMap.get(player.id);
+    if (llmBotId && this.options.serverUrl && this.options.authToken) {
       // LLM bot — call server API
-      this.makeLLMBotDecision(player, botId);
+      this.makeLLMBotDecision(player, llmBotId);
       return;
     }
 
-    // Rule-based decision
+    const ruleBotId = this.ruleBotMap.get(player.id);
+    if (ruleBotId && this.options.serverUrl && this.options.authToken) {
+      // Named rule bot — call server API for full strategy (Monte Carlo simulation)
+      this.makeNamedRuleBotDecision(player, ruleBotId);
+      return;
+    }
+
+    // Anonymous rule-based decision (local simplified strategy)
     this.makeRuleBasedDecision(player);
   }
 
@@ -580,6 +627,65 @@ export class LocalGameEngine {
     }
 
     // Fallback to rule-based if LLM call fails
+    this.makeRuleBasedDecision(player);
+  }
+
+  /** Named rule bot (Blaze/Shield/Sage) — call server API for full Monte Carlo strategy */
+  private async makeNamedRuleBotDecision(player: Player, botId: string): Promise<void> {
+    const context = {
+      playerId: player.id,
+      hand: player.cards,
+      communityCards: this.state.communityCards,
+      pot: this.state.pot,
+      currentBet: this.state.currentBet,
+      playerBet: player.currentBet,
+      playerChips: player.chips,
+      minRaise: this.state.minRaise,
+      bigBlind: this.state.bigBlind,
+      phase: this.state.phase,
+      numActivePlayers: getPlayersInHand(this.state).length,
+      position: this.estimatePosition(player),
+      personality: player.aiPersonality || 'balanced',
+      players: this.state.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        chips: p.chips,
+        currentBet: p.currentBet,
+        isFolded: p.isFolded,
+        isAllIn: p.isAllIn,
+      })),
+    };
+
+    try {
+      const response = await fetch(`${this.options.serverUrl}/api/rule-bot/decision`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.options.authToken}`,
+        },
+        body: JSON.stringify({ botId, context }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.action) {
+          const action = data.action as PlayerAction;
+          const soundMap: Record<string, any> = {
+            fold: 'fold', check: 'check', call: 'call', raise: 'raise', 'all-in': 'allIn',
+          };
+          playSound(soundMap[action.type] || 'chip');
+
+          if (isValidAction(this.state, player.id, action)) {
+            this.processAction(player.id, action);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[LocalGame] Rule bot ${botId} API call failed, falling back to local rule-based`, err);
+    }
+
+    // Fallback to local simplified rule-based if API call fails
     this.makeRuleBasedDecision(player);
   }
 
