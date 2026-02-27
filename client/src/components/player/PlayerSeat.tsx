@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
-import { Player, Card, GamePhase, evaluateHand, LLM_BOT_CONFIGS } from '@texas-agent/shared';
+import { Player, Card, GamePhase, evaluateHand, LLM_BOT_CONFIGS, RULE_BOT_CONFIGS } from '@texas-agent/shared';
 import { formatChips } from '@texas-agent/shared';
 import PokerCard from '../table/PokerCard';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -148,6 +148,10 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
           {player.isLLMBot ? (
             <div className={`${compact ? 'w-3 h-3 text-[9px]' : 'w-4 h-4 sm:w-6 sm:h-6 text-xs sm:text-sm'} rounded-full flex items-center justify-center bg-indigo-600/50`}>
               {LLM_BOT_CONFIGS.find(b => b.id === player.llmBotId)?.emoji ?? '🧠'}
+            </div>
+          ) : player.isRuleBot ? (
+            <div className={`${compact ? 'w-3 h-3 text-[9px]' : 'w-4 h-4 sm:w-6 sm:h-6 text-xs sm:text-sm'} rounded-full flex items-center justify-center bg-amber-600/50`}>
+              {RULE_BOT_CONFIGS.find(b => b.id === player.ruleBotId)?.emoji ?? '🤖'}
             </div>
           ) : (
             <div className={`${compact ? 'w-3 h-3' : 'w-4 h-4 sm:w-6 sm:h-6'} rounded-full flex items-center justify-center

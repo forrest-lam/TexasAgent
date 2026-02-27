@@ -134,7 +134,7 @@ export class LocalGameEngine {
       this.llmBotMap.set(playerId, bot.id);
       players.push({
         id: playerId,
-        name: `${bot.emoji} ${bot.name}`,
+        name: bot.name,
         chips: AI_STARTING_CHIPS,
         cards: [],
         currentBet: 0,
@@ -157,7 +157,7 @@ export class LocalGameEngine {
       this.ruleBotMap.set(playerId, bot.id);
       players.push({
         id: playerId,
-        name: `${bot.emoji} ${bot.name}`,
+        name: bot.name,
         chips: AI_STARTING_CHIPS,
         cards: [],
         currentBet: 0,
