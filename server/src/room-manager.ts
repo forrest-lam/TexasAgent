@@ -197,7 +197,7 @@ export function inviteLLMBot(roomId: string, botId: string): Room {
   const seatIndex = getNextAvailableSeat(room);
   const botPlayer: Player = {
     id: botId,
-    name: `${bot.emoji} ${bot.name}`,
+    name: bot.name,
     chips,
     cards: [],
     currentBet: 0,
