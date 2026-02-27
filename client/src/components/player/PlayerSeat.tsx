@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
-import { Player, Card, GamePhase, evaluateHand } from '@texas-agent/shared';
+import { Player, Card, GamePhase, evaluateHand, LLM_BOT_CONFIGS } from '@texas-agent/shared';
 import { formatChips } from '@texas-agent/shared';
 import PokerCard from '../table/PokerCard';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -145,10 +145,16 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
 
         {/* Avatar & Name */}
         <div className="flex items-center justify-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
-          <div className={`${compact ? 'w-3 h-3' : 'w-4 h-4 sm:w-6 sm:h-6'} rounded-full flex items-center justify-center
-            ${player.isAI ? 'bg-purple-600/50' : 'bg-blue-600/50'}`}>
-            {player.isAI ? <Bot size={compact ? 8 : 10} className={compact ? '' : 'sm:w-3.5 sm:h-3.5'} /> : <User size={compact ? 8 : 10} className={compact ? '' : 'sm:w-3.5 sm:h-3.5'} />}
-          </div>
+          {player.isLLMBot ? (
+            <div className={`${compact ? 'w-3 h-3 text-[9px]' : 'w-4 h-4 sm:w-6 sm:h-6 text-xs sm:text-sm'} rounded-full flex items-center justify-center bg-indigo-600/50`}>
+              {LLM_BOT_CONFIGS.find(b => b.id === player.llmBotId)?.emoji ?? '🧠'}
+            </div>
+          ) : (
+            <div className={`${compact ? 'w-3 h-3' : 'w-4 h-4 sm:w-6 sm:h-6'} rounded-full flex items-center justify-center
+              ${player.isAI ? 'bg-purple-600/50' : 'bg-blue-600/50'}`}>
+              {player.isAI ? <Bot size={compact ? 8 : 10} className={compact ? '' : 'sm:w-3.5 sm:h-3.5'} /> : <User size={compact ? 8 : 10} className={compact ? '' : 'sm:w-3.5 sm:h-3.5'} />}
+            </div>
+          )}
           <span className={`${compact ? 'text-[9px] max-w-[44px]' : 'text-[11px] sm:text-xs max-w-[56px] sm:max-w-[70px]'} font-semibold text-white truncate`}>
             {isSelf ? t('player.you') : player.name}
           </span>

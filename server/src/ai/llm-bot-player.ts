@@ -13,12 +13,12 @@ import { buildDecisionPrompt, parseDecisionResponse } from './llm/prompt-builder
 
 const LLM_BOT_TIMEOUT_MS = 50_000;
 
-/** Map botId → env var name for the API key */
-const BOT_API_KEY_ENV: Record<string, string> = {
-  'llm-bot-deepseek': 'DEEPSEEK_API_KEY',
-  'llm-bot-kimi': 'KIMI_API_KEY',
-  'llm-bot-minimax': 'MINIMAX_API_KEY',
-  'llm-bot-qwen': 'QWEN_API_KEY',
+/** Map botId → env var suffix for per-bot overrides */
+const BOT_ENV_SUFFIX: Record<string, string> = {
+  'llm-bot-deepseek': 'DEEPSEEK',
+  'llm-bot-kimi': 'KIMI',
+  'llm-bot-minimax': 'MINIMAX',
+  'llm-bot-qwen': 'QWEN',
 };
 
 export class LLMBotPlayer {
@@ -37,10 +37,11 @@ export class LLMBotPlayer {
     const cfg = LLM_BOT_CONFIGS.find(c => c.id === botId);
     if (!cfg) throw new Error(`Unknown LLM bot id: ${botId}`);
 
+    const suffix = BOT_ENV_SUFFIX[botId] ?? '';
     this.botId = botId;
     this.name = cfg.name;
-    this.model = cfg.model;
-    this.apiBaseUrl = cfg.apiBaseUrl;
+    this.model = (suffix && process.env[`LLM_MODEL_${suffix}`]) || cfg.model;
+    this.apiBaseUrl = (suffix && process.env[`LLM_API_BASE_URL_${suffix}`]) || process.env.LLM_API_BASE_URL || cfg.apiBaseUrl;
     this.personality = cfg.personality;
     this.emoji = cfg.emoji;
     this.fallback = new RuleBasedStrategy(cfg.personality);
@@ -65,8 +66,9 @@ export class LLMBotPlayer {
   }
 
   private getApiKey(): string {
-    const envVar = BOT_API_KEY_ENV[this.botId] || '';
-    return process.env[envVar] || process.env.LLM_API_KEY || '';
+    const suffix = BOT_ENV_SUFFIX[this.botId] ?? '';
+    const perBotKey = suffix ? process.env[`${suffix}_API_KEY`] : '';
+    return perBotKey || process.env.LLM_API_KEY || '';
   }
 
   async makeDecision(context: AIDecisionContext): Promise<PlayerAction> {

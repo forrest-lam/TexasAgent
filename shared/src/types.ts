@@ -164,38 +164,38 @@ export interface AuthResponse {
 
 export const DEFAULT_USER_CHIPS = 2000;
 export const AI_STARTING_CHIPS = 1000;
-export const LLM_BOT_STARTING_CHIPS = 5000;
+export const LLM_BOT_STARTING_CHIPS = 2000;
 
 /** Built-in LLM bot definitions */
 export const LLM_BOT_CONFIGS = [
   {
     id: 'llm-bot-deepseek',
     name: 'DeepSeek',
-    model: 'deepseek-v3',
-    apiBaseUrl: 'https://api.deepseek.com/v1',
+    model: 'deepseek-v3.2',
+    apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     personality: 'aggressive' as AIPersonality,
     emoji: '🤖',
   },
   {
     id: 'llm-bot-kimi',
     name: 'Kimi',
-    model: 'moonshot-v1-8k',
-    apiBaseUrl: 'https://api.moonshot.cn/v1',
+    model: 'kimi-k2.5',
+    apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     personality: 'balanced' as AIPersonality,
     emoji: '🌙',
   },
   {
     id: 'llm-bot-minimax',
     name: 'MiniMax',
-    model: 'MiniMax-M1',
-    apiBaseUrl: 'https://api.minimaxi.chat/v1',
+    model: 'MiniMax-M2.5',
+    apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     personality: 'conservative' as AIPersonality,
     emoji: '⚡',
   },
   {
     id: 'llm-bot-qwen',
     name: 'Qwen',
-    model: 'qwen-plus',
+    model: 'qwen3.5-plus',
     apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     personality: 'balanced' as AIPersonality,
     emoji: '☁️',

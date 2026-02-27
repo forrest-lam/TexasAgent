@@ -58,10 +58,14 @@ function ensureLLMBotAccounts() {
       changed = true;
       console.log(`[UserStore] Created LLM bot account: ${cfg.name} (${cfg.id})`);
     } else {
-      // Ensure isLLMBot flag is set on existing accounts
+      // Ensure isLLMBot flag and chips are in sync with config
       const existing = users.get(cfg.id)!;
       if (!existing.isLLMBot) {
         existing.isLLMBot = true;
+        changed = true;
+      }
+      if (existing.chips !== LLM_BOT_STARTING_CHIPS) {
+        existing.chips = LLM_BOT_STARTING_CHIPS;
         changed = true;
       }
     }

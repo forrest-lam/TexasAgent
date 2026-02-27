@@ -120,6 +120,12 @@ export function setupSocketHandlers(io: IOServer): void {
     // Room list
     socket.on('room:list', () => {
       socket.emit('room:list', RoomManager.getRoomList());
+      // Also push LLM bot list so client has it immediately
+      const bots = llmBotRegistry.getAll().map(bot => ({
+        id: bot.botId, name: bot.name, model: bot.model,
+        emoji: bot.emoji, personality: bot.personality, busy: bot.isBusy,
+      }));
+      socket.emit('room:llm-bots', bots as any);
     });
 
     // Create room (requires auth)
@@ -305,6 +311,42 @@ export function setupSocketHandlers(io: IOServer): void {
       const room = RoomManager.addAIPlayer(roomId, personality, engineType);
       io.to(room.id).emit('room:updated', room);
       broadcastRoomList(io);
+    });
+
+    // Invite LLM bot into room
+    socket.on('room:invite-llm-bot', (botId: string) => {
+      if (!requireAuth('room:invite-llm-bot')) return;
+      const roomId = playerRooms.get(socket.id);
+      if (!roomId) { socket.emit('error', 'Not in a room'); return; }
+      const room = RoomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.ownerId !== socket.id) { socket.emit('error', 'Only the room owner can invite bots'); return; }
+      try {
+        const updatedRoom = RoomManager.inviteLLMBot(roomId, botId);
+        io.to(roomId).emit('room:updated', updatedRoom);
+        broadcastRoomList(io);
+        broadcastLLMBotList(io);
+      } catch (err: any) {
+        socket.emit('error', err.message);
+      }
+    });
+
+    // Remove LLM bot from room
+    socket.on('room:remove-llm-bot', (botId: string) => {
+      if (!requireAuth('room:remove-llm-bot')) return;
+      const roomId = playerRooms.get(socket.id);
+      if (!roomId) { socket.emit('error', 'Not in a room'); return; }
+      const room = RoomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.ownerId !== socket.id) { socket.emit('error', 'Only the room owner can remove bots'); return; }
+      try {
+        const updatedRoom = RoomManager.removeLLMBot(roomId, botId);
+        io.to(roomId).emit('room:updated', updatedRoom);
+        broadcastRoomList(io);
+        broadcastLLMBotList(io);
+      } catch (err: any) {
+        socket.emit('error', err.message);
+      }
     });
 
     // Start game (requires auth)

@@ -7,6 +7,7 @@ import Pot from './Pot';
 import PlayerSeat from '../player/PlayerSeat';
 import ChipAnimation from './ChipAnimation';
 import RaiseEffect from './RaiseEffect';
+import GiftFlyAnimation from './GiftFlyAnimation';
 import { useI18n } from '../../i18n';
 
 interface PokerTableProps {
@@ -295,31 +296,12 @@ export default function PokerTable({ gameState, myPlayerId, isMultiplayer = fals
         isAllIn={raiseEffect?.isAllIn}
       />
 
-      {/* Reaction floating animations */}
-      <AnimatePresence>
-        {reactions.map(reaction => {
-          // Find the target player position
-          const orderIdx = ordered.findIndex(p => p.id === reaction.toId);
-          const targetPos = positions[orderIdx] || { x: '50%', y: '50%' };
-          return (
-            <motion.div
-              key={reaction.id}
-              className="absolute z-50 pointer-events-none text-3xl sm:text-4xl"
-              style={{
-                left: targetPos.x,
-                top: targetPos.y,
-                transform: 'translate(-50%, -50%)',
-              }}
-              initial={{ opacity: 0, scale: 0.5, y: 0 }}
-              animate={{ opacity: 1, scale: 1.5, y: -60 }}
-              exit={{ opacity: 0, scale: 0.8, y: -100 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-            >
-              {reaction.emoji}
-            </motion.div>
-          );
-        })}
-      </AnimatePresence>
+      {/* Gift fly animations — from sender to receiver */}
+      <GiftFlyAnimation
+        reactions={reactions as any}
+        positions={positions}
+        ordered={ordered}
+      />
     </div>
   );
 }
