@@ -95,7 +95,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   addLog: (entry: LogEntry) => {
-    set(s => ({ gameLog: [...s.gameLog.slice(-49), entry] }));
+    set(s => ({ gameLog: [entry, ...s.gameLog.slice(0, 49)] }));
   },
 
   addHandAction: (action: HandAction) => {
