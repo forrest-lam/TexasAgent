@@ -1,6 +1,8 @@
-import { Room, RoomConfig, Player, AIPersonality, AIEngineType, AI_STARTING_CHIPS } from '@texas-agent/shared';
+import { Room, RoomConfig, Player, AIPersonality, AIEngineType, AI_STARTING_CHIPS, LLM_BOT_CONFIGS, LLMBotId } from '@texas-agent/shared';
 import { generateId } from '@texas-agent/shared';
 import { getRandomAIName } from './ai/rule-based/personalities';
+import { llmBotRegistry } from './ai/llm-bot-player';
+import { getUserById } from './user-store';
 
 const MAX_ROOMS = 50;
 const rooms = new Map<string, Room>();
@@ -114,6 +116,14 @@ export function leaveRoom(roomId: string, playerId: string): Room | null {
   const room = rooms.get(roomId);
   if (!room) return null;
 
+  // If this is an LLM bot, release it
+  const leavingPlayer = room.players.find(p => p.id === playerId) ||
+    room.pendingPlayers?.find(p => p.id === playerId);
+  if (leavingPlayer?.isLLMBot && leavingPlayer.llmBotId) {
+    const bot = llmBotRegistry.get(leavingPlayer.llmBotId as LLMBotId);
+    bot?.releaseRoom(roomId);
+  }
+
   room.players = room.players.filter(p => p.id !== playerId);
   if (room.pendingPlayers) {
     room.pendingPlayers = room.pendingPlayers.filter(p => p.id !== playerId);
@@ -126,6 +136,8 @@ export function leaveRoom(roomId: string, playerId: string): Room | null {
   const humanPlayers = room.players.filter(p => !p.isAI);
   const pendingHumans = (room.pendingPlayers || []).filter(p => !p.isAI);
   if (humanPlayers.length === 0 && pendingHumans.length === 0) {
+    // Release all LLM bots in this room
+    releaseAllLLMBots(roomId);
     rooms.delete(roomId);
     return null;
   }
@@ -159,12 +171,74 @@ export function addAIPlayer(roomId: string, personality: AIPersonality, engineTy
   return room;
 }
 
+/**
+ * Invite a named LLM bot into a room.
+ * Throws if bot is already in another room, or room is full.
+ */
+export function inviteLLMBot(roomId: string, botId: string): Room {
+  const room = rooms.get(roomId);
+  if (!room) throw new Error('Room not found');
+  if (room.players.length >= room.config.maxPlayers) throw new Error('Room is full');
+
+  if (!llmBotRegistry.isValidBotId(botId)) throw new Error(`Unknown LLM bot: ${botId}`);
+
+  const bot = llmBotRegistry.get(botId as LLMBotId)!;
+
+  // Check if already in this room
+  if (room.players.find(p => p.llmBotId === botId)) throw new Error('Bot already in this room');
+
+  // Check if busy in another room
+  if (bot.isBusy) throw new Error(`${bot.name} is already in another game`);
+
+  // Get bot's stored chips from user store
+  const botProfile = getUserById(botId);
+  const chips = botProfile?.chips ?? 5000;
+
+  const seatIndex = getNextAvailableSeat(room);
+  const botPlayer: Player = {
+    id: botId,
+    name: `${bot.emoji} ${bot.name}`,
+    chips,
+    cards: [],
+    currentBet: 0,
+    totalBet: 0,
+    isActive: true,
+    isFolded: false,
+    isAllIn: false,
+    isAI: true,
+    isLLMBot: true,
+    llmBotId: botId,
+    aiPersonality: bot.personality,
+    aiEngineType: 'llm',
+    seatIndex,
+  };
+
+  bot.occupyRoom(roomId);
+  room.players.push(botPlayer);
+  return room;
+}
+
+/**
+ * Remove an LLM bot from a room (before game start).
+ */
+export function removeLLMBot(roomId: string, botId: string): Room {
+  const room = rooms.get(roomId);
+  if (!room) throw new Error('Room not found');
+
+  const bot = llmBotRegistry.get(botId as LLMBotId);
+  if (bot) bot.releaseRoom(roomId);
+
+  room.players = room.players.filter(p => p.llmBotId !== botId);
+  return room;
+}
+
 export function getRoom(roomId: string): Room | undefined {
   return rooms.get(roomId);
 }
 
 /** Force-delete a room (used when only AI players remain) */
 export function deleteRoom(roomId: string): void {
+  releaseAllLLMBots(roomId);
   rooms.delete(roomId);
 }
 
@@ -184,6 +258,13 @@ export function getRoomByPlayerId(playerId: string): Room | undefined {
     if (room.pendingPlayers?.find(p => p.id === playerId)) return room;
   }
   return undefined;
+}
+
+/** Release all LLM bots occupying a given room */
+function releaseAllLLMBots(roomId: string) {
+  for (const bot of llmBotRegistry.getAll()) {
+    bot.releaseRoom(roomId);
+  }
 }
 
 function getNextAvailableSeat(room: Room): number {
