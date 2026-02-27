@@ -16,6 +16,25 @@ const CHAT_RATE_LIMIT_MS = 5000; // 5 seconds between messages
 const playerRooms = new Map<string, string>();
 // Map socket.id → userId for chip settlement
 const socketUserMap = new Map<string, string>();
+const connectedUsers = new Map<string, { username: string; chips: number }>();
+
+function broadcastOnlinePlayers(io: IOServer): void {
+  const players = Array.from(connectedUsers.entries()).map(([userId, info]) => {
+    let status = 'lobby';
+    for (const [sid, uid] of socketUserMap.entries()) {
+      if (uid === userId) {
+        const roomId = playerRooms.get(sid);
+        if (roomId) {
+          const room = RoomManager.getRoom(roomId);
+          if (room) status = room.status === 'playing' ? 'playing' : 'waiting';
+        }
+        break;
+      }
+    }
+    return { username: info.username, chips: info.chips, status };
+  });
+  io.emit('lobby:online-players', players);
+}
 // Map userId → { roomId, socketId, username } for reconnection support
 const disconnectedPlayers = new Map<string, { roomId: string; socketId: string; username: string; disconnectTime: number }>();
 const RECONNECT_GRACE_PERIOD = 60000; // 60 seconds to reconnect
@@ -27,6 +46,12 @@ export function setupSocketHandlers(io: IOServer): void {
     const isGuest = (socket as any).data.isGuest === true;
     console.log(`Player connected: ${username} (${socket.id})${isGuest ? ' [GUEST]' : ''}`);
     socketUserMap.set(socket.id, userId);
+    // Track online player
+    const _userProfile = getUserById(userId);
+    if (!isGuest && _userProfile) {
+      connectedUsers.set(userId, { username, chips: _userProfile.chips });
+      broadcastOnlinePlayers(io);
+    }
 
     // Check for reconnection — restore player to their previous room/game
     const disconnectInfo = disconnectedPlayers.get(userId);
@@ -393,30 +418,11 @@ export function setupSocketHandlers(io: IOServer): void {
     });
 
     // Start game (requires auth)
-    socket.on('game:start', () => {
-      if (!requireAuth('game:start')) return;
-      const roomId = playerRooms.get(socket.id);
-      if (!roomId) {
-        socket.emit('error', 'Not in a room');
-        return;
-      }
-
+    // Helper: actually start the game after topup is done (or not needed)
+    const doStartGame = (roomId: string) => {
       const room = RoomManager.getRoom(roomId);
-      if (!room) {
-        socket.emit('error', 'Room not found');
-        return;
-      }
-
-      // Only the room owner can start the game
-      if (room.ownerId !== socket.id) {
-        socket.emit('error', 'Only the room owner can start the game');
-        return;
-      }
-
-      if (room.players.length < MIN_PLAYERS) {
-        socket.emit('error', `Need at least ${MIN_PLAYERS} players`);
-        return;
-      }
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.players.length < MIN_PLAYERS) { socket.emit('error', `Need at least ${MIN_PLAYERS} players`); return; }
 
       // Create game controller
       const controller = new GameController(room, (rId, event, data) => {
@@ -470,6 +476,61 @@ export function setupSocketHandlers(io: IOServer): void {
       // Note: personalized game state is already sent via emitGameEvent('game:started')
       // inside controller.startGame(). A duplicate game:state here races with game:your-turn
       // and resets isMyTurn to false on the client (causing 2-3 player action freeze).
+    };
+
+    socket.on('game:start', () => {
+      if (!requireAuth('game:start')) return;
+      const roomId = playerRooms.get(socket.id);
+      if (!roomId) { socket.emit('error', 'Not in a room'); return; }
+
+      const room = RoomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+
+      // Only the room owner can start the game
+      if (room.ownerId !== socket.id) { socket.emit('error', 'Only the room owner can start the game'); return; }
+
+      if (room.players.length < MIN_PLAYERS) { socket.emit('error', `Need at least ${MIN_PLAYERS} players`); return; }
+
+      // Check if any bots need topping up
+      const topupNeeds = RoomManager.getBotTopupNeeds(roomId);
+      if (topupNeeds.length > 0) {
+        const total = topupNeeds.reduce((sum, n) => sum + n.needed, 0);
+        // Send topup-required event to owner with full breakdown
+        socket.emit('game:topup-required', { items: topupNeeds, total });
+        return;
+      }
+
+      doStartGame(roomId);
+    });
+
+    // Owner confirmed topup at game start
+    socket.on('game:start-confirmed', () => {
+      if (!requireAuth('game:start-confirmed')) return;
+      const roomId = playerRooms.get(socket.id);
+      if (!roomId) { socket.emit('error', 'Not in a room'); return; }
+
+      const room = RoomManager.getRoom(roomId);
+      if (!room) { socket.emit('error', 'Room not found'); return; }
+      if (room.ownerId !== socket.id) { socket.emit('error', 'Only the room owner can start the game'); return; }
+
+      try {
+        // Perform chip transfer: owner -> under-funded bots
+        RoomManager.topupBotsFromOwner(roomId, userId);
+        // Notify owner of updated chips
+        const ownerUser = getUserById(userId);
+        if (ownerUser) {
+          socket.emit('user:updated', {
+            id: ownerUser.id,
+            username: ownerUser.username,
+            chips: ownerUser.chips,
+            stats: ownerUser.stats,
+            createdAt: ownerUser.createdAt,
+          });
+        }
+        doStartGame(roomId);
+      } catch (err: any) {
+        socket.emit('error', err.message?.replace('INSUFFICIENT_CHIPS:', '筹码不足，无法开始：需要 ') ?? '开始失败');
+      }
     });
 
     // Player action (requires auth)
@@ -606,6 +667,9 @@ export function setupSocketHandlers(io: IOServer): void {
       handleLeaveRoom(io, socket);
       socketUserMap.delete(socket.id);
       chatRateLimit.delete(socket.id);
+      // Remove from online tracking
+      connectedUsers.delete(userId);
+      broadcastOnlinePlayers(io);
     });
   });
 }

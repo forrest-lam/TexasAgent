@@ -189,6 +189,7 @@ export interface AuthResponse {
   };
 }
 
+export const BOT_MIN_CHIPS = 2000; // 邀请 bot 时要求的最低筹码
 export const DEFAULT_USER_CHIPS = 2000;
 export const AI_STARTING_CHIPS = 1000;
 export const LLM_BOT_STARTING_CHIPS = 2000;
@@ -226,6 +227,14 @@ export const LLM_BOT_CONFIGS = [
     apiBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     personality: 'balanced' as AIPersonality,
     emoji: '☁️',
+  },
+  {
+    id: 'llm-bot-glm',
+    name: 'GLM',
+    model: 'glm-5',
+    apiBaseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+    personality: 'balanced' as AIPersonality,
+    emoji: '🔮',
   },
 ] as const;
 
@@ -276,6 +285,9 @@ export interface ServerToClientEvents {
   'room:llm-bots': (bots: Array<{ id: string; name: string; model: string; chips: number; busy: boolean }>) => void;
   'room:rule-bots': (bots: Array<{ id: string; name: string; personality: string; emoji: string; chips: number; busy: boolean }>) => void;
   'room:reaction': (data: { fromId: string; fromName: string; toId: string; toName: string; emoji: string }) => void;
+  'room:bot-topup-required': (data: { botId: string; needed: number; botName: string }) => void;
+  'game:topup-required': (data: { items: Array<{ botId: string; botName: string; needed: number }>; total: number }) => void;
+  'lobby:online-players': (players: Array<{ username: string; chips: number; status: string }>) => void;
 }
 
 export interface ClientToServerEvents {
@@ -287,9 +299,9 @@ export interface ClientToServerEvents {
   'room:stand': () => void;
   'room:leave': () => void;
   'room:add-ai': (personality: AIPersonality, engineType: AIEngineType) => void;
-  'room:invite-llm-bot': (botId: string) => void;
+  'room:invite-llm-bot': (botId: string, topupConfirmed?: boolean) => void;
   'room:remove-llm-bot': (botId: string) => void;
-  'room:invite-rule-bot': (botId: string) => void;
+  'room:invite-rule-bot': (botId: string, topupConfirmed?: boolean) => void;
   'room:remove-rule-bot': (botId: string) => void;
   'game:start': () => void;
   'game:action': (action: PlayerAction) => void;

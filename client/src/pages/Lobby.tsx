@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLobbyStore, LLMBotInfo, RuleBotInfo } from '../stores/lobby-store';
+import { useLobbyStore, LLMBotInfo, RuleBotInfo, OnlinePlayer } from '../stores/lobby-store';
 import { DEFAULT_ROOM_CONFIG, BLIND_LEVELS, RoomConfig, AIPersonality } from '@texas-agent/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { motion } from 'framer-motion';
-import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff, Settings, LogOut, Coins, Trophy, Crown } from 'lucide-react';
+import { Gamepad2, Users, Bot, Plus, LogIn, Wifi, WifiOff, Settings, LogOut, Coins, Trophy, Crown, Radio } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { LanguageSwitch } from '../components/controls/LanguageSwitch';
 import SoundToggle from '../components/controls/SoundToggle';
@@ -19,7 +19,7 @@ import { getSocket } from '../services/socket-service';
 
 export default function Lobby() {
   const navigate = useNavigate();
-  const { rooms, currentRoom, isConnected, isSpectating, connect, createRoom, joinRoom, spectateRoom, addAI, startGame, inviteLLMBot, removeLLMBot, llmBots, inviteRuleBot, removeRuleBot, ruleBots } = useLobbyStore();
+  const { rooms, currentRoom, isConnected, isSpectating, connect, createRoom, joinRoom, spectateRoom, addAI, startGame, startGameConfirmed, inviteLLMBot, removeLLMBot, llmBots, inviteRuleBot, removeRuleBot, ruleBots, setGameTopupRequired, onlinePlayers } = useLobbyStore();
   const { t } = useI18n();
   const { user, logout } = useAuthStore();
 
@@ -76,6 +76,7 @@ export default function Lobby() {
         addAI(pick, 'rule-based');
       }}
       onStart={startGame}
+      onStartConfirmed={startGameConfirmed}
       onLeave={useLobbyStore.getState().leaveRoom}
       isOwner={currentRoom.ownerId === getSocket().id}
       llmBots={llmBots}
@@ -84,6 +85,8 @@ export default function Lobby() {
       ruleBots={ruleBots}
       onInviteRuleBot={inviteRuleBot}
       onRemoveRuleBot={removeRuleBot}
+      user={user}
+      setGameTopupRequired={setGameTopupRequired}
     />;
   }
 
@@ -220,6 +223,45 @@ export default function Lobby() {
             </div>
           </div>
         )}
+
+        {/* Online Players */}
+        {onlinePlayers.length > 0 && (
+          <div className="space-y-4 mt-8">
+            <div className="flex items-center gap-2">
+              <Radio size={16} className="text-green-400 animate-pulse" />
+              <h3 className="text-lg font-semibold text-white">在线玩家</h3>
+              <span className="text-xs text-gray-500 ml-1">({onlinePlayers.length})</span>
+            </div>
+            <div className="glass-card rounded-2xl overflow-hidden">
+              <div className="flex flex-wrap gap-2 p-4">
+                {onlinePlayers.map((player) => (
+                  <div
+                    key={player.username}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border
+                      ${player.status === 'playing'
+                        ? 'bg-red-500/10 border-red-500/20 text-red-300'
+                        : player.status === 'waiting'
+                        ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-300'
+                        : 'bg-green-500/10 border-green-500/20 text-green-300'
+                      }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0
+                      ${player.status === 'playing' ? 'bg-red-400' : player.status === 'waiting' ? 'bg-yellow-400' : 'bg-green-400'}`}
+                    />
+                    <span className="font-medium">{player.username}</span>
+                    <span className="text-[10px] opacity-60 font-mono">${player.chips.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="px-4 pb-3 flex gap-4 text-[10px] text-gray-600">
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"/>大厅</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block"/>等待中</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"/>游戏中</span>
+              </div>
+            </div>
+          </div>
+        )}
+
       {/* Leaderboard */}
         {leaderboard.length > 0 && (
           <div className="space-y-4 mt-8">
@@ -319,14 +361,25 @@ export default function Lobby() {
   );
 }
 
-function RoomWaitingScreen({ room, onAddAI, onStart, onLeave, isOwner, llmBots, onInviteLLMBot, onRemoveLLMBot, ruleBots, onInviteRuleBot, onRemoveRuleBot }: {
-  room: any; onAddAI: () => void; onStart: () => void; onLeave: () => void; isOwner: boolean;
+function RoomWaitingScreen({ room, onAddAI, onStart, onStartConfirmed, onLeave, isOwner, llmBots, onInviteLLMBot, onRemoveLLMBot, ruleBots, onInviteRuleBot, onRemoveRuleBot, user, setGameTopupRequired }: {
+  room: any; onAddAI: () => void; onStart: () => void; onStartConfirmed: () => void; onLeave: () => void; isOwner: boolean;
   llmBots?: LLMBotInfo[]; onInviteLLMBot?: (id: string) => void; onRemoveLLMBot?: (id: string) => void;
   ruleBots?: RuleBotInfo[]; onInviteRuleBot?: (id: string) => void; onRemoveRuleBot?: (id: string) => void;
+  user?: any; setGameTopupRequired?: (cb: ((data: { items: { botId: string; botName: string; needed: number }[]; total: number }) => void) | null) => void;
 }) {
   const { t } = useI18n();
+  const [topupPending, setTopupPending] = useState<{ items: { botId: string; botName: string; needed: number }[]; total: number } | null>(null);
   const minPlayers = 2;
   const canStart = isOwner && room.players.length >= minPlayers;
+
+  // Register game-start topup callback with store
+  useEffect(() => {
+    if (!setGameTopupRequired) return;
+    setGameTopupRequired((data) => {
+      setTopupPending(data);
+    });
+    return () => { setGameTopupRequired(null); };
+  }, [setGameTopupRequired]);
   return (
     <div className="min-h-screen bg-casino-bg flex flex-col items-center justify-center px-3 sm:px-4">
       <div className="glass-card rounded-2xl p-5 sm:p-8 max-w-lg w-full space-y-4 sm:space-y-6">
@@ -457,6 +510,60 @@ function RoomWaitingScreen({ room, onAddAI, onStart, onLeave, isOwner, llmBots, 
           {t('room.leaveRoom')}
         </Button>
       </div>
+
+      {/* Game-start Bot Topup Confirmation Dialog */}
+      {topupPending && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open) setTopupPending(null); }}>
+          <DialogContent className="bg-casino-card border-casino-border text-white max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-gold-400">补充机器人筹码</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {user && user.chips < topupPending.total ? (
+                <p className="text-sm text-red-400">
+                  你的余额不足（当前 <span className="font-bold text-yellow-400">{user.chips.toLocaleString()}</span> 筹码），无法开始游戏（共需补充 <span className="font-bold">{topupPending.total.toLocaleString()}</span> 筹码）。
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-300">以下机器人筹码不足，开始游戏将从你的余额中扣除：</p>
+                  <ul className="space-y-1">
+                    {topupPending.items.map(item => (
+                      <li key={item.botId} className="flex justify-between text-sm px-2 py-1 bg-white/5 rounded-lg">
+                        <span className="text-white">{item.botName}</span>
+                        <span className="text-yellow-400 font-mono">+{item.needed.toLocaleString()} 筹码</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex justify-between text-sm font-semibold px-2 pt-1 border-t border-casino-border/30">
+                    <span className="text-gray-300">共扣除</span>
+                    <span className="text-red-400 font-mono">-{topupPending.total.toLocaleString()} 筹码</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setTopupPending(null)}
+                  className="border-white/20 text-gray-300 hover:bg-white/10 cursor-pointer"
+                >
+                  {user && user.chips < topupPending.total ? '关闭' : '取消'}
+                </Button>
+                {(!user || user.chips >= topupPending.total) && (
+                  <Button
+                    onClick={() => {
+                      setTopupPending(null);
+                      onStartConfirmed();
+                    }}
+                    className="bg-gold-500 text-black hover:bg-gold-400 font-bold cursor-pointer"
+                  >
+                    确认开始
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

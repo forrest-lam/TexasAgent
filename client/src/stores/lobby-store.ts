@@ -17,6 +17,12 @@ export interface RuleBotInfo {
   personality: string;
   busy: boolean;
 }
+
+export interface OnlinePlayer {
+  username: string;
+  chips: number;
+  status: 'lobby' | 'waiting' | 'playing';
+}
 import { getSocket, connectSocket } from '../services/socket-service';
 import { useAuthStore } from './auth-store';
 
@@ -27,6 +33,12 @@ if (typeof window !== 'undefined') {
   window.addEventListener('socket-reconnect', () => {
     listenersAttached = false;
   });
+}
+
+export interface BotTopupItem {
+  botId: string;
+  botName: string;
+  needed: number;
 }
 
 interface LobbyState {
@@ -49,9 +61,13 @@ interface LobbyState {
   removeLLMBot: (botId: string) => void;
   inviteRuleBot: (botId: string) => void;
   removeRuleBot: (botId: string) => void;
+  onGameTopupRequired: ((data: { items: BotTopupItem[]; total: number }) => void) | null;
+  setGameTopupRequired: (cb: ((data: { items: BotTopupItem[]; total: number }) => void) | null) => void;
   startGame: () => void;
+  startGameConfirmed: () => void;
   llmBots: LLMBotInfo[];
   ruleBots: RuleBotInfo[];
+  onlinePlayers: OnlinePlayer[];
 }
 
 export const useLobbyStore = create<LobbyState>((set, get) => ({
@@ -63,6 +79,8 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   isStandingUp: false,
   llmBots: [],
   ruleBots: [],
+  onlinePlayers: [],
+  onGameTopupRequired: null,
 
   connect: () => {
     const token = useAuthStore.getState().token;
@@ -146,6 +164,15 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
       set({ ruleBots: bots });
     });
 
+    socket.on('lobby:online-players', (players) => {
+      set({ onlinePlayers: players as OnlinePlayer[] });
+    });
+
+    socket.on('game:topup-required', (data: { items: BotTopupItem[]; total: number }) => {
+      const cb = get().onGameTopupRequired;
+      if (cb) cb(data);
+    });
+
     // Request initial LLM bot list
     socket.emit('room:list');
   },
@@ -211,8 +238,17 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     socket.emit('room:remove-rule-bot', botId);
   },
 
+  setGameTopupRequired: (cb) => {
+    set({ onGameTopupRequired: cb });
+  },
+
   startGame: () => {
     const socket = getSocket();
     socket.emit('game:start');
+  },
+
+  startGameConfirmed: () => {
+    const socket = getSocket();
+    socket.emit('game:start-confirmed');
   },
 }));

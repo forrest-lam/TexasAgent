@@ -1,9 +1,9 @@
-import { Room, RoomConfig, Player, AIPersonality, AIEngineType, AI_STARTING_CHIPS, LLM_BOT_CONFIGS, LLMBotId, RULE_BOT_CONFIGS, RuleBotId } from '@texas-agent/shared';
+import { Room, RoomConfig, Player, AIPersonality, AIEngineType, AI_STARTING_CHIPS, LLM_BOT_CONFIGS, LLMBotId, RULE_BOT_CONFIGS, RuleBotId, BOT_MIN_CHIPS } from '@texas-agent/shared';
 import { generateId } from '@texas-agent/shared';
 import { getRandomAIName } from './ai/rule-based/personalities';
 import { llmBotRegistry } from './ai/llm-bot-player';
 import { ruleBotRegistry } from './ai/rule-bot-player';
-import { getUserById } from './user-store';
+import { getUserById, updateUserChips } from './user-store';
 
 const MAX_ROOMS = 50;
 const rooms = new Map<string, Room>();
@@ -180,6 +180,7 @@ export function addAIPlayer(roomId: string, personality: AIPersonality, engineTy
 /**
  * Invite a named LLM bot into a room.
  * Throws if bot is already in another room, or room is full.
+ * Chip funding (topup to BOT_MIN_CHIPS) happens at game start via topupBotsFromOwner().
  */
 export function inviteLLMBot(roomId: string, botId: string): Room {
   const room = rooms.get(roomId);
@@ -240,6 +241,7 @@ export function removeLLMBot(roomId: string, botId: string): Room {
 
 /**
  * Invite a named rule-based bot into a room.
+ * Chip funding (topup to BOT_MIN_CHIPS) happens at game start via topupBotsFromOwner().
  */
 export function inviteRuleBot(roomId: string, botId: string): Room {
   const room = rooms.get(roomId);
@@ -292,6 +294,57 @@ export function removeRuleBot(roomId: string, botId: string): Room {
 
   room.players = room.players.filter(p => p.ruleBotId !== botId);
   return room;
+}
+
+
+export interface BotTopupItem {
+  botId: string;
+  botName: string;
+  needed: number;
+}
+
+/**
+ * Check all bots in a room for chips < BOT_MIN_CHIPS.
+ * Returns a list of items that need topping up.
+ */
+export function getBotTopupNeeds(roomId: string): BotTopupItem[] {
+  const room = rooms.get(roomId);
+  if (!room) return [];
+  const items: BotTopupItem[] = [];
+  for (const player of room.players) {
+    if ((player.isLLMBot || player.isRuleBot) && player.chips < BOT_MIN_CHIPS) {
+      items.push({
+        botId: player.id,
+        botName: player.name,
+        needed: BOT_MIN_CHIPS - player.chips,
+      });
+    }
+  }
+  return items;
+}
+
+/**
+ * Perform chip top-up for all bots in a room that are below BOT_MIN_CHIPS.
+ * Deducts total from ownerId's balance.
+ * Throws if owner has insufficient chips.
+ */
+export function topupBotsFromOwner(roomId: string, ownerId: string): void {
+  const room = rooms.get(roomId);
+  if (!room) throw new Error('Room not found');
+  const needs = getBotTopupNeeds(roomId);
+  if (needs.length === 0) return;
+  const total = needs.reduce((sum, n) => sum + n.needed, 0);
+  const ownerProfile = getUserById(ownerId);
+  if (!ownerProfile || ownerProfile.chips < total) {
+    throw new Error(`INSUFFICIENT_CHIPS:${total}`);
+  }
+  updateUserChips(ownerId, -total);
+  for (const item of needs) {
+    updateUserChips(item.botId, item.needed);
+    // Also update in-memory player chips so the game starts with correct values
+    const player = room.players.find(p => p.id === item.botId);
+    if (player) player.chips = BOT_MIN_CHIPS;
+  }
 }
 
 export function getRoom(roomId: string): Room | undefined {

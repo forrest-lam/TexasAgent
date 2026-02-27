@@ -12,6 +12,7 @@ import { ServerToClientEvents, ClientToServerEvents, AuthResponse } from '@texas
 import { setupSocketHandlers } from './socket-handler';
 import { signToken, authMiddleware, socketAuthMiddleware } from './auth';
 import { createUser, authenticateUser, getUserById, updateUserLLMConfig, setUserChips, getAllUsers } from './user-store';
+import { getRoomByPlayerId } from './room-manager';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -187,6 +188,19 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
   const user = getUserById((req as any).userId);
   if (!user) {
     res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  // Check if it is this player turn — only current player can request AI advisor
+  const userId = (req as any).userId;
+  const room = getRoomByPlayerId(userId);
+  if (!room || !room.gameState) {
+    res.status(400).json({ error: "You are not in an active game" });
+    return;
+  }
+  const currentPlayer = room.gameState.players[room.gameState.currentPlayerIndex];
+  if (!currentPlayer || currentPlayer.id !== userId) {
+    res.status(400).json({ error: "It is not your turn. You can only request AI advice on your own turn." });
     return;
   }
 

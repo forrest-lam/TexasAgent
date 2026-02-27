@@ -18,7 +18,7 @@ const BOT_ENV_SUFFIX: Record<string, string> = {
   'llm-bot-deepseek': 'DEEPSEEK',
   'llm-bot-kimi': 'KIMI',
   'llm-bot-minimax': 'MINIMAX',
-  'llm-bot-qwen': 'QWEN',
+  'llm-bot-qwen': 'QWEN',  'llm-bot-glm': 'GLM',,
 };
 
 export class LLMBotPlayer {
