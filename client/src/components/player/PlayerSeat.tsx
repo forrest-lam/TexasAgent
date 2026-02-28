@@ -118,10 +118,10 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
       {/* Player info — with long press / right-click for emoji picker */}
       <div
         className={`relative rounded-lg sm:rounded-xl ${compact ? 'px-1.5 py-1' : 'px-2.5 py-1.5 sm:px-3 sm:py-2'} ${compact ? 'min-w-[56px]' : 'min-w-[76px] sm:min-w-[100px]'} text-center transition-all duration-300
-          ${isCurrentTurn ? 'ring-2 ring-gold-400 animate-pulse-gold' : ''}
+          ${isCurrentTurn ? 'ring-2 ring-gold-400 player-card-3d-active animate-pulse-gold' : 'player-card-3d'}
           ${isWinner ? 'ring-2 ring-gold-400 winner-glow' : ''}
           ${player.isFolded ? 'opacity-40' : ''}
-          bg-casino-card/90 backdrop-blur-sm border border-casino-border/50
+          bg-gradient-to-b from-casino-card/95 to-casino-card/80 backdrop-blur-sm border border-casino-border/50
           ${isMultiplayer && !isSelf ? 'cursor-pointer select-none' : ''}`}
         onMouseDown={handleLongPressStart}
         onMouseUp={handleLongPressEnd}
@@ -220,15 +220,17 @@ export default function PlayerSeat({ player, isCurrentTurn, isSelf, phase, posit
         </AnimatePresence>
       </div>
 
-      {/* Bet chip — realistic poker chip style */}
+      {/* Bet chip — 3D poker chip style */}
       {player.currentBet > 0 && (
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           className="mt-0.5 sm:mt-1 flex items-center gap-0.5 sm:gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-black/60 border border-white/15 backdrop-blur-sm"
+          style={{ boxShadow: '0 3px 10px rgba(0,0,0,0.4)' }}
         >
-          <div className="relative w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-br from-red-600 to-red-800 border-[1.5px] border-red-400 shadow-md shrink-0">
+          <div className="relative w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-br from-red-500 to-red-700 border-[1.5px] border-red-400 chip-3d shrink-0">
             <div className="absolute inset-[2px] rounded-full border border-white/20" />
+            <div className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)' }} />
           </div>
           <span className="text-gold-400 text-[10px] sm:text-xs font-bold tabular-nums">
             {formatChips(player.currentBet)}

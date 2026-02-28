@@ -191,7 +191,7 @@ export interface AuthResponse {
 
 export const BOT_MIN_CHIPS = 2000; // 邀请 bot 时要求的最低筹码
 export const DEFAULT_USER_CHIPS = 2000;
-export const AI_STARTING_CHIPS = 1000;
+export const AI_STARTING_CHIPS = 2000;
 export const LLM_BOT_STARTING_CHIPS = 2000;
 
 /** Built-in LLM bot definitions — all use the same personality for fair model comparison */

@@ -32,10 +32,10 @@ export default function PokerCard({ card, faceDown = false, size = 'md', delay =
         initial={{ scale: 0.5, opacity: 0, y: -40 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay }}
-        className={`${sizeClass} rounded-lg bg-gradient-to-br from-blue-900 to-blue-700 border border-blue-500/30 shadow-lg flex items-center justify-center`}
+        className={`${sizeClass} rounded-lg card-back-3d poker-card-3d border border-blue-400/20 flex items-center justify-center`}
       >
-        <div className="w-[80%] h-[80%] rounded border border-blue-400/20 bg-blue-800/50 flex items-center justify-center">
-          <span className="text-blue-300/50 text-lg font-bold">♠</span>
+        <div className="w-[80%] h-[80%] rounded-md border border-blue-300/15 bg-blue-900/30 flex items-center justify-center backdrop-blur-sm">
+          <span className="text-blue-200/30 text-lg font-bold">♠</span>
         </div>
       </motion.div>
     );
@@ -49,18 +49,22 @@ export default function PokerCard({ card, faceDown = false, size = 'md', delay =
       initial={{ scale: 0.5, opacity: 0, rotateY: 180 }}
       animate={{ scale: 1, opacity: 1, rotateY: 0 }}
       transition={{ duration: 0.5, delay }}
-      className={`${sizeClass} rounded-lg bg-white shadow-lg border border-gray-200 flex flex-col p-0.5 sm:p-1 cursor-default select-none relative overflow-hidden`}
+      className={`${sizeClass} rounded-lg card-face-3d poker-card-3d border border-gray-200/80 flex flex-col p-0.5 sm:p-1 cursor-default select-none relative overflow-hidden`}
     >
-      <div className="flex flex-col items-start leading-none">
+      {/* Glossy highlight */}
+      <div className="absolute inset-0 rounded-lg pointer-events-none"
+        style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 40%, transparent 60%, rgba(0,0,0,0.03) 100%)' }} />
+
+      <div className="flex flex-col items-start leading-none relative z-10">
         <span className="font-bold" style={{ color: suitColor }}>{card.rank}</span>
         <span style={{ color: suitColor }}>{suitSymbol}</span>
       </div>
-      <div className="flex-1 flex items-center justify-center">
-        <span className={`${size === 'sm' ? 'text-lg sm:text-xl' : 'text-xl sm:text-3xl'}`} style={{ color: suitColor }}>
+      <div className="flex-1 flex items-center justify-center relative z-10">
+        <span className={`${size === 'sm' ? 'text-lg sm:text-xl' : 'text-xl sm:text-3xl'} drop-shadow-sm`} style={{ color: suitColor }}>
           {suitSymbol}
         </span>
       </div>
-      <div className="flex flex-col items-end leading-none rotate-180">
+      <div className="flex flex-col items-end leading-none rotate-180 relative z-10">
         <span className="font-bold" style={{ color: suitColor }}>{card.rank}</span>
         <span style={{ color: suitColor }}>{suitSymbol}</span>
       </div>

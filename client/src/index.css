@@ -54,12 +54,154 @@
   }
 
   .bg-felt-gradient {
-    background: radial-gradient(ellipse at center, #2E7D32 0%, #1B5E20 40%, #145218 70%, #0D3B11 100%);
+    background: radial-gradient(ellipse at 50% 40%, #35893a 0%, #2E7D32 20%, #1B5E20 45%, #145218 70%, #0D3B11 100%);
   }
 
   .glass-card {
     @apply bg-casino-card/80 backdrop-blur-md border border-casino-border/50;
   }
+}
+
+/* ===== 2.5D Table Perspective System ===== */
+.table-perspective-wrapper {
+  perspective: 900px;
+  perspective-origin: 50% 40%;
+}
+
+.table-3d {
+  transform: rotateX(18deg);
+  transform-style: preserve-3d;
+}
+
+/* Table felt surface with realistic lighting */
+.table-felt-3d {
+  background:
+    /* Top highlight — simulates overhead light */
+    radial-gradient(ellipse 80% 50% at 50% 25%, rgba(80,180,80,0.25) 0%, transparent 60%),
+    /* Subtle fabric texture noise */
+    radial-gradient(ellipse 3px 3px at 30% 45%, rgba(255,255,255,0.02) 0%, transparent 100%),
+    radial-gradient(ellipse 2px 3px at 70% 55%, rgba(255,255,255,0.015) 0%, transparent 100%),
+    /* Base felt gradient */
+    radial-gradient(ellipse at 50% 40%, #35893a 0%, #2E7D32 20%, #1B5E20 45%, #145218 70%, #0D3B11 100%);
+  box-shadow:
+    /* Inner depth shadow */
+    inset 0 8px 40px rgba(0,0,0,0.35),
+    inset 0 -4px 20px rgba(0,0,0,0.2),
+    /* Table edge glow from overhead light */
+    0 -4px 20px rgba(60,130,60,0.15),
+    /* Drop shadow beneath table */
+    0 20px 60px rgba(0,0,0,0.7),
+    0 8px 30px rgba(0,0,0,0.5);
+}
+
+/* Wooden rail / bumper around the table */
+.table-rail-3d {
+  background: linear-gradient(
+    180deg,
+    #8B6914 0%,
+    #A0792B 15%,
+    #6B4E0A 30%,
+    #5C4209 50%,
+    #7A5C18 70%,
+    #9B7422 85%,
+    #6B4E0A 100%
+  );
+  box-shadow:
+    inset 0 2px 4px rgba(255,215,0,0.15),
+    inset 0 -2px 6px rgba(0,0,0,0.5),
+    0 4px 16px rgba(0,0,0,0.5),
+    0 8px 30px rgba(0,0,0,0.3);
+}
+
+/* Overhead ambient light cone on table */
+.table-light-cone {
+  background: radial-gradient(
+    ellipse 60% 45% at 50% 35%,
+    rgba(255,255,220,0.06) 0%,
+    rgba(255,255,200,0.02) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+/* Metal studs around rail */
+.table-stud {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #E8C547 0%, #8B6914 60%, #5C4209 100%);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.6), inset 0 0.5px 1px rgba(255,255,200,0.4);
+}
+
+/* 3D poker card styling */
+.poker-card-3d {
+  transform-style: preserve-3d;
+  box-shadow:
+    1px 2px 4px rgba(0,0,0,0.3),
+    2px 4px 8px rgba(0,0,0,0.2),
+    0 0 1px rgba(0,0,0,0.3);
+}
+
+.poker-card-3d:hover {
+  box-shadow:
+    1px 2px 6px rgba(0,0,0,0.4),
+    2px 6px 12px rgba(0,0,0,0.25),
+    0 0 1px rgba(0,0,0,0.3);
+}
+
+/* Card back pattern with depth */
+.card-back-3d {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 3px,
+      rgba(255,255,255,0.03) 3px,
+      rgba(255,255,255,0.03) 6px
+    ),
+    linear-gradient(135deg, #1a3a8a 0%, #1e40af 30%, #1a3a8a 50%, #1e3a7a 70%, #162d6b 100%);
+}
+
+/* Card face subtle gradient */
+.card-face-3d {
+  background: linear-gradient(160deg, #ffffff 0%, #fafafa 40%, #f0f0f0 100%);
+}
+
+/* 3D chip styling */
+.chip-3d {
+  transform-style: preserve-3d;
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.4),
+    0 4px 8px rgba(0,0,0,0.2),
+    inset 0 1px 2px rgba(255,255,255,0.2);
+}
+
+/* Player card 3D floating effect */
+.player-card-3d {
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.4),
+    0 2px 4px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(12px);
+}
+
+.player-card-3d-active {
+  box-shadow:
+    0 4px 16px rgba(212,175,55,0.3),
+    0 2px 8px rgba(212,175,55,0.2),
+    0 8px 24px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* Ambient floor shadow under the table */
+.table-floor-shadow {
+  background: radial-gradient(
+    ellipse 90% 40% at 50% 80%,
+    rgba(0,0,0,0.4) 0%,
+    rgba(0,0,0,0.15) 50%,
+    transparent 80%
+  );
+  pointer-events: none;
 }
 
 /* Winner crown + glow animation */

@@ -256,8 +256,16 @@ export default function Game() {
 
   return (
     <div className="h-screen w-full bg-casino-bg overflow-hidden relative">
-      {/* Background effects */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(27,94,32,0.06)_0%,transparent_70%)]" />
+      {/* Ambient room background — dark room with overhead light */}
+      <div className="absolute inset-0"
+        style={{
+          background: `
+            radial-gradient(ellipse 70% 50% at 50% 40%, rgba(27,94,32,0.1) 0%, transparent 60%),
+            radial-gradient(ellipse 50% 40% at 50% 35%, rgba(255,255,220,0.03) 0%, transparent 50%),
+            radial-gradient(ellipse 120% 80% at 50% 100%, rgba(0,0,0,0.3) 0%, transparent 50%)
+          `
+        }}
+      />
 
       {/* Top bar */}
       <div className="fixed top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-4 z-50 flex items-center justify-between">

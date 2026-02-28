@@ -39,7 +39,7 @@ export const DEFAULT_ROOM_CONFIG: RoomConfig = {
   maxPlayers: 6,
   smallBlind: 5,
   bigBlind: 10,
-  startingChips: 1000,
+  startingChips: 2000,
   aiCount: 3,
   aiDifficulty: 'balanced',
   aiEngine: 'rule-based',

@@ -15,7 +15,8 @@ export default function CommunityCards({ cards }: CommunityCardsProps) {
       {Array.from({ length: 5 - cards.length }).map((_, i) => (
         <motion.div
           key={`empty-${i}`}
-          className="w-10 h-14 sm:w-12 sm:h-17 rounded-lg border border-dashed border-white/10 bg-white/5"
+          className="w-10 h-14 sm:w-12 sm:h-17 rounded-lg border border-dashed border-white/8 bg-white/3"
+          style={{ boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.2)' }}
         />
       ))}
     </div>

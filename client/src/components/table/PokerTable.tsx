@@ -4,6 +4,7 @@ import { useGameStore } from '../../stores/game-store';
 import { GameState } from '@texas-agent/shared';
 import CommunityCards from './CommunityCards';
 import Pot from './Pot';
+import Dealer from './Dealer';
 import PlayerSeat from '../player/PlayerSeat';
 import ChipAnimation from './ChipAnimation';
 import RaiseEffect from './RaiseEffect';
@@ -224,44 +225,65 @@ export default function PokerTable({ gameState, myPlayerId, isMultiplayer = fals
 
   return (
     <div className={`relative w-full h-full ${screenShake === 'heavy' ? 'screen-shake-heavy' : screenShake === 'normal' ? 'screen-shake' : ''}`}>
-      {/* Table surface — shifted left on mobile to match seat layout */}
-      <div className="absolute inset-[2%] sm:inset-[5%] max-sm:-translate-x-[3%] rounded-[50%] bg-felt-gradient shadow-2xl border-4 sm:border-8 border-amber-900/60"
-        style={{ boxShadow: 'inset 0 0 60px rgba(0,0,0,0.4), 0 0 40px rgba(0,0,0,0.6)' }}
-      >
-        {/* Inner rail */}
-        <div className="absolute inset-2 sm:inset-3 rounded-[50%] border border-gold-500/10" />
+      {/* === 2.5D Perspective Container === */}
+      <div className="absolute inset-0 table-perspective-wrapper">
+        {/* Floor shadow beneath the table */}
+        <div className="absolute inset-0 table-floor-shadow" />
 
-        {/* Center content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 sm:gap-3">
-          {/* Phase indicator */}
-          <div className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-black/30 text-gray-300 text-[10px] sm:text-xs font-medium uppercase tracking-wider">
-            {phaseLabel} · {t('game.round')} {gameState.round}
-          </div>
+        {/* 3D-tilted table group */}
+        <div className="absolute inset-[2%] sm:inset-[4%] max-sm:-translate-x-[3%] table-3d">
+          {/* Outer wooden rail / bumper */}
+          <div className="absolute inset-0 rounded-[50%] table-rail-3d" />
 
-          {/* Community cards */}
-          <CommunityCards cards={gameState.communityCards} />
+          {/* Felt playing surface (inset from rail) */}
+          <div className="absolute inset-[6px] sm:inset-[10px] rounded-[50%] table-felt-3d">
+            {/* Inner decorative gold line */}
+            <div className="absolute inset-3 sm:inset-5 rounded-[50%] border border-gold-500/15" />
+            {/* Second inner line */}
+            <div className="absolute inset-4 sm:inset-6 rounded-[50%] border border-gold-500/8" />
 
-          {/* Pot */}
-          <Pot amount={gameState.pot} />
+            {/* Overhead light cone */}
+            <div className="absolute inset-0 rounded-[50%] table-light-cone" />
 
-          {/* Winners */}
-          {gameState.winners && gameState.winners.length > 0 && (
-            <div className="flex flex-col items-center gap-1 mt-1 sm:mt-2">
-              {gameState.winners.map((w, i) => {
-                const p = gameState.players.find(pl => pl.id === w.playerId);
-                return (
-                  <div key={i} className="px-2 py-1 sm:px-3 sm:py-1.5 rounded-full bg-gold-500/20 border border-gold-500/40 text-gold-400 text-[10px] sm:text-sm font-semibold winner-flash flex items-center gap-1 sm:gap-1.5">
-                    <span className="text-xs sm:text-base">👑</span>
-                    {p?.name} wins ${w.amount} ({tHand(w.handName)})
-                  </div>
-                );
-              })}
+            {/* Center content — un-rotate to keep text readable */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 sm:gap-2"
+              style={{ transform: 'rotateX(-18deg)' }}>
+              {/* Croupier — 荷官 at center of table */}
+              <Dealer phase={gameState.phase} />
+
+              {/* Phase indicator */}
+              <div className="px-2 py-0.5 sm:px-3 sm:py-1 rounded-full bg-black/40 text-gray-300 text-[10px] sm:text-xs font-medium uppercase tracking-wider border border-white/5 backdrop-blur-sm"
+                style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+                {phaseLabel} · {t('game.round')} {gameState.round}
+              </div>
+
+              {/* Community cards */}
+              <CommunityCards cards={gameState.communityCards} />
+
+              {/* Pot */}
+              <Pot amount={gameState.pot} />
+
+              {/* Winners */}
+              {gameState.winners && gameState.winners.length > 0 && (
+                <div className="flex flex-col items-center gap-1 mt-1 sm:mt-2">
+                  {gameState.winners.map((w, i) => {
+                    const p = gameState.players.find(pl => pl.id === w.playerId);
+                    return (
+                      <div key={i} className="px-2 py-1 sm:px-3 sm:py-1.5 rounded-full bg-gold-500/20 border border-gold-500/40 text-gold-400 text-[10px] sm:text-sm font-semibold winner-flash flex items-center gap-1 sm:gap-1.5"
+                        style={{ boxShadow: '0 2px 12px rgba(212,175,55,0.2)' }}>
+                        <span className="text-xs sm:text-base">👑</span>
+                        {p?.name} wins ${w.amount} ({tHand(w.handName)})
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Player seats */}
+      {/* Player seats — outside perspective to remain upright */}
       {ordered.map((player, i) => {
         const pos = positions[i] || { x: '50%', y: '50%' };
         const origIdx = gameState.players.findIndex(p => p.id === player.id);
