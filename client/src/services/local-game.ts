@@ -114,12 +114,12 @@ export class LocalGameEngine {
       seatIndex: 0,
     }];
 
-    // Pick random LLM bots (up to maxLLMBots, default 2) if server is available
+    // Pick random LLM bots (up to maxLLMBots, default 2)
+    // LLM bots always join; if server API is unavailable they fallback to local rule-based strategy
     this.llmBotMap.clear();
     this.ruleBotMap.clear();
     const maxLLM = this.options.maxLLMBots ?? 2;
-    const canUseLLM = !!(this.options.serverUrl && this.options.authToken);
-    const selectedLLMBots = canUseLLM ? pickRandomLLMBots(maxLLM) : [];
+    const selectedLLMBots = pickRandomLLMBots(maxLLM);
 
     // Pick random named rule bots (up to maxRuleBots, default 2)
     // Named rule bots always work — they fallback to local rule-based strategy if API is unavailable

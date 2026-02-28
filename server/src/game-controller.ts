@@ -129,6 +129,25 @@ export class GameController {
   /** Handle a human player leaving mid-game: mark them as folded & inactive */
   handlePlayerLeave(playerId: string): void {
     const state = this.room.gameState;
+
+    // Even if state is in showdown/waiting (e.g. between hands), check if only AI remain.
+    // Exclude the leaving player since they haven't been removed from room.players yet.
+    const humanPlayersInRoom = this.room.players.filter(p => !p.isAI && p.id !== playerId);
+    if (humanPlayersInRoom.length === 0) {
+      console.log(`[handlePlayerLeave] No human players left in room ${this.room.id}, aborting immediately`);
+      this.clearActionTimer();
+      if (this.nextHandTimer) {
+        clearTimeout(this.nextHandTimer);
+        this.nextHandTimer = null;
+      }
+      this.room.status = 'waiting';
+      this.emitEvent(this.room.id, 'room:updated', this.room);
+      if (this.onRoomEmpty) {
+        this.onRoomEmpty();
+      }
+      return;
+    }
+
     if (!state || state.phase === 'waiting' || state.phase === 'showdown') return;
 
     const player = state.players.find(p => p.id === playerId);
