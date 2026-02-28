@@ -40,6 +40,22 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   next();
 }
 
+/**
+ * Optional auth middleware — tries to authenticate but allows unauthenticated
+ * requests to proceed (sets userId/username to undefined).
+ */
+export function optionalAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    const payload = verifyToken(authHeader.slice(7));
+    if (payload) {
+      (req as any).userId = payload.userId;
+      (req as any).username = payload.username;
+    }
+  }
+  next();
+}
+
 // Socket.IO middleware — extract user from token in auth handshake
 // Allows anonymous (guest) connections for spectating; authenticated for playing
 export function socketAuthMiddleware(socket: any, next: (err?: Error) => void) {

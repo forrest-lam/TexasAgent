@@ -409,7 +409,8 @@ export async function getAdvice(state: GameState, myPlayerId: string, handAction
   const token = getAuthToken();
   const locale = useI18n.getState().locale;
 
-  if (!token) {
+  // In local mode, allow unauthenticated requests (server will use shared keys)
+  if (!isLocal && !token) {
     throw new Error('Not authenticated');
   }
 
@@ -418,12 +419,16 @@ export async function getAdvice(state: GameState, myPlayerId: string, handAction
 
   const API_BASE = import.meta.env.VITE_SERVER_URL ?? (import.meta.env.PROD ? '' : `http://${window.location.hostname}:3001`);
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE}/api/llm/chat`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
+    headers,
     body: JSON.stringify({
       messages: [
         { role: 'system', content: getSystemPrompt(locale) },

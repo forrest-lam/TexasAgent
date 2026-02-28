@@ -93,7 +93,8 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, isLocal, o
   const handActions = useGameStore(s => s.handActions);
   const navigate = useNavigate();
 
-  const hasKey = hasLLMApiKey();
+  // In local mode, advisor is always available (uses server shared keys)
+  const hasKey = isLocal || hasLLMApiKey();
 
   const handleGetAdvice = async () => {
     if (loading) return;

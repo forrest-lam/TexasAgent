@@ -10,7 +10,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { ServerToClientEvents, ClientToServerEvents, AuthResponse } from '@texas-agent/shared';
 import { setupSocketHandlers } from './socket-handler';
-import { signToken, authMiddleware, socketAuthMiddleware } from './auth';
+import { signToken, authMiddleware, optionalAuthMiddleware, socketAuthMiddleware } from './auth';
 import { createUser, authenticateUser, getUserById, updateUserLLMConfig, setUserChips, getAllUsers } from './user-store';
 import { getRoomByPlayerId } from './room-manager';
 
@@ -184,19 +184,20 @@ app.get('/api/user/llm-config/full', authMiddleware, (req, res) => {
 });
 
 // --- LLM proxy route (avoids CORS issues with direct browser→OpenAI calls) ---
-app.post('/api/llm/chat', authMiddleware, async (req, res) => {
-  const user = getUserById((req as any).userId);
-  if (!user) {
-    res.status(404).json({ error: 'User not found' });
-    return;
-  }
-
-  // In local (single-player) mode the game runs on the client, so skip room/turn checks
+// Uses optionalAuth so unauthenticated local-mode requests can use shared keys
+app.post('/api/llm/chat', optionalAuthMiddleware, async (req, res) => {
   const isLocalMode = req.body?.localMode === true;
+  const userId = (req as any).userId as string | undefined;
+  const user = userId ? getUserById(userId) : null;
+
+  // Non-local requests require authentication and a valid user
   if (!isLocalMode) {
+    if (!user) {
+      res.status(401).json({ error: 'Authentication required for multiplayer mode' });
+      return;
+    }
     // Check if it is this player turn — only current player can request AI advisor
-    const userId = (req as any).userId;
-    const room = getRoomByPlayerId(userId);
+    const room = getRoomByPlayerId(userId!);
     if (!room || !room.gameState) {
       res.status(400).json({ error: "You are not in an active game" });
       return;
@@ -208,8 +209,8 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
     }
   }
 
-  // Resolve API key: user's own key → server shared key (random MiniMax/deepseek)
-  const userConfig = user.llmConfig;
+  // Resolve API key: user's own key → server shared key (random bot key from .env)
+  const userConfig = user?.llmConfig;
   const hasOwnKey = !!(userConfig?.apiKey);
   let apiKey: string;
   let apiBaseUrl: string;
@@ -221,17 +222,10 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
     apiBaseUrl = (userConfig!.apiBaseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
     model = userConfig!.model || 'gpt-4o-mini';
   } else {
-    // No personal key — use server shared key with random MiniMax-M1-M2.5 / deepseek-v3 assignment
-    apiKey = process.env.LLM_API_KEY || '';
-    // Randomly pick MiniMax or deepseek
-    const usesMiniMax = Math.random() < 0.5;
-    if (usesMiniMax) {
-      apiBaseUrl = (process.env.LLM_API_BASE_URL_MINIMAX || 'https://api.minimaxi.chat/v1').replace(/\/$/, '');
-      model = process.env.LLM_MODEL_MINIMAX || 'MiniMax-M1';
-    } else {
-      apiBaseUrl = (process.env.LLM_API_BASE_URL_DEEPSEEK || 'https://api.deepseek.com/v1').replace(/\/$/, '');
-      model = process.env.LLM_MODEL_DEEPSEEK || 'deepseek-chat';
-    }
+    // No personal key — use server-side ADVISOR_* shared key
+    apiKey = process.env.ADVISOR_API_KEY || '';
+    apiBaseUrl = (process.env.ADVISOR_API_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+    model = process.env.ADVISOR_MODEL || 'qwen-plus';
   }
 
   if (!apiKey) {
@@ -246,7 +240,7 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
   }
 
   const startTime = Date.now();
-  console.log(`[LLM Proxy] Request from user=${user.username} model=${model} baseUrl=${apiBaseUrl} messages=${messages.length} max_tokens=${max_tokens || 800}`);
+  console.log(`[LLM Proxy] Request from user=${user?.username ?? 'anonymous'} model=${model} baseUrl=${apiBaseUrl} messages=${messages.length} max_tokens=${max_tokens || 800}`);
 
   try {
     const response = await fetch(`${apiBaseUrl}/chat/completions`, {
