@@ -191,17 +191,21 @@ app.post('/api/llm/chat', authMiddleware, async (req, res) => {
     return;
   }
 
-  // Check if it is this player turn — only current player can request AI advisor
-  const userId = (req as any).userId;
-  const room = getRoomByPlayerId(userId);
-  if (!room || !room.gameState) {
-    res.status(400).json({ error: "You are not in an active game" });
-    return;
-  }
-  const currentPlayer = room.gameState.players[room.gameState.currentPlayerIndex];
-  if (!currentPlayer || currentPlayer.id !== userId) {
-    res.status(400).json({ error: "It is not your turn. You can only request AI advice on your own turn." });
-    return;
+  // In local (single-player) mode the game runs on the client, so skip room/turn checks
+  const isLocalMode = req.body?.localMode === true;
+  if (!isLocalMode) {
+    // Check if it is this player turn — only current player can request AI advisor
+    const userId = (req as any).userId;
+    const room = getRoomByPlayerId(userId);
+    if (!room || !room.gameState) {
+      res.status(400).json({ error: "You are not in an active game" });
+      return;
+    }
+    const currentPlayer = room.gameState.players[room.gameState.currentPlayerIndex];
+    if (!currentPlayer || currentPlayer.id !== userId) {
+      res.status(400).json({ error: "It is not your turn. You can only request AI advice on your own turn." });
+      return;
+    }
   }
 
   // Resolve API key: user's own key → server shared key (random MiniMax/deepseek)

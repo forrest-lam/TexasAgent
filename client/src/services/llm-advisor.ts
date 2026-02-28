@@ -405,7 +405,7 @@ export interface AdvisorSuggestion {
   reason: string;
 }
 
-export async function getAdvice(state: GameState, myPlayerId: string, handActions: HandAction[] = []): Promise<AdvisorSuggestion[]> {
+export async function getAdvice(state: GameState, myPlayerId: string, handActions: HandAction[] = [], isLocal = false): Promise<AdvisorSuggestion[]> {
   const token = getAuthToken();
   const locale = useI18n.getState().locale;
 
@@ -431,6 +431,7 @@ export async function getAdvice(state: GameState, myPlayerId: string, handAction
       ],
       max_tokens: 800,
       temperature: 0.7,
+      ...(isLocal ? { localMode: true } : {}),
     }),
   });
 

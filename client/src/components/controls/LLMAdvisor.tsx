@@ -11,6 +11,7 @@ interface LLMAdvisorProps {
   gameState: GameState;
   myPlayerId: string;
   isMyTurn: boolean;
+  isLocal?: boolean;
   onAction?: (action: PlayerAction) => void;
 }
 
@@ -82,7 +83,7 @@ function getProbColor(prob: number): string {
   return 'bg-gray-600/80 text-gray-200';
 }
 
-export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }: LLMAdvisorProps) {
+export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, isLocal, onAction }: LLMAdvisorProps) {
   const [suggestions, setSuggestions] = useState<AdvisorSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +103,7 @@ export default function LLMAdvisor({ gameState, myPlayerId, isMyTurn, onAction }
     setSuggestions([]);
     setExpanded(true);
     try {
-      const result = await getAdvice(gameState, myPlayerId, handActions);
+      const result = await getAdvice(gameState, myPlayerId, handActions, isLocal);
       setSuggestions(result);
     } catch (e: any) {
       const msg = e.message || '';

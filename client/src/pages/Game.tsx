@@ -351,6 +351,7 @@ export default function Game() {
             gameState={gameState}
             myPlayerId={myPlayerId}
             isMyTurn={isMyTurn || (isLocal && gameState.players[gameState.currentPlayerIndex]?.id === 'human' && gameState.phase !== 'showdown')}
+            isLocal={isLocal}
             onAction={handleAction}
           />
 
