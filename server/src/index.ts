@@ -225,7 +225,7 @@ app.post('/api/llm/chat', optionalAuthMiddleware, async (req, res) => {
     // No personal key — use server-side ADVISOR_* shared key
     apiKey = process.env.ADVISOR_API_KEY || '';
     apiBaseUrl = (process.env.ADVISOR_API_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-    model = process.env.ADVISOR_MODEL || 'qwen-plus';
+    model = process.env.ADVISOR_MODEL || 'deepseek-v3.2';
   }
 
   if (!apiKey) {
