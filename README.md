@@ -128,13 +128,19 @@ LLM 请求通过**服务端代理**（`POST /api/llm/chat`）转发，API Key �
 
 **方式二：服务端环境变量全局配置**
 
-作为全局 fallback（当用户未配置个人 API Key 时生效）：
+作为全局 fallback（当用户未配置个人 API Key 时生效）。在项目根目录创建 `.env` 文件：
 
 ```env
+# 默认 LLM API（MiniMax-M2.5, kimi-k2.5, deepseek-v3.2 使用）
 LLM_API_KEY=sk-your-api-key
-LLM_API_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o-mini
+LLM_API_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+
+# Coding LLM API（qwen3.5-plus, glm-5 使用）
+CODING_LLM_API_KEY=sk-your-coding-api-key
+CODING_LLM_API_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
 ```
+
+此外仍支持**逐个机器人覆盖**，优先级：`{SUFFIX}_API_KEY` > `CODING_LLM_API_KEY`/`LLM_API_KEY` > 硬编码默认值。
 
 > 支持任何 OpenAI 兼容 API（DeepSeek、Ollama 等），不配置也可正常游戏，仅 LLM 顾问和 LLM AI 引擎不可用。
 
