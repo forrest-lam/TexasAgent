@@ -13,7 +13,7 @@ import { buildDecisionPrompt, parseDecisionResponse, getSystemMessage, getTemper
 
 const LLM_BOT_TIMEOUT_MS = 50_000;
 
-/** Map botId → env var suffix for per-bot overrides */
+/** Map botId → env var suffix for per-bot config */
 const BOT_ENV_SUFFIX: Record<string, string> = {
   'llm-bot-deepseek': 'DEEPSEEK',
   'llm-bot-kimi': 'KIMI',
@@ -21,9 +21,6 @@ const BOT_ENV_SUFFIX: Record<string, string> = {
   'llm-bot-qwen': 'QWEN',
   'llm-bot-glm': 'GLM',
 };
-
-/** Bots that use the CODING_LLM_* env vars instead of LLM_* */
-const CODING_LLM_BOTS = new Set(['llm-bot-qwen', 'llm-bot-glm']);
 
 export class LLMBotPlayer {
   readonly botId: LLMBotId;
@@ -42,13 +39,10 @@ export class LLMBotPlayer {
     if (!cfg) throw new Error(`Unknown LLM bot id: ${botId}`);
 
     const suffix = BOT_ENV_SUFFIX[botId] ?? '';
-    const isCodingBot = CODING_LLM_BOTS.has(botId);
     this.botId = botId;
     this.name = cfg.name;
     this.model = (suffix && process.env[`LLM_MODEL_${suffix}`]) || cfg.model;
-    // Per-bot override → group env var (CODING_LLM or LLM) → config default
-    const groupBaseUrl = isCodingBot ? process.env.CODING_LLM_API_BASE_URL : process.env.LLM_API_BASE_URL;
-    this.apiBaseUrl = (suffix && process.env[`LLM_API_BASE_URL_${suffix}`]) || groupBaseUrl || cfg.apiBaseUrl;
+    this.apiBaseUrl = (suffix && process.env[`LLM_API_BASE_URL_${suffix}`]) || cfg.apiBaseUrl;
     this.personality = cfg.personality;
     this.emoji = cfg.emoji;
     this.fallback = new RuleBasedStrategy(cfg.personality);
@@ -74,11 +68,7 @@ export class LLMBotPlayer {
 
   private getApiKey(): string {
     const suffix = BOT_ENV_SUFFIX[this.botId] ?? '';
-    const perBotKey = suffix ? process.env[`${suffix}_API_KEY`] : '';
-    if (perBotKey) return perBotKey;
-    // Use CODING_LLM_API_KEY for coding bots, LLM_API_KEY for others
-    const isCodingBot = CODING_LLM_BOTS.has(this.botId);
-    return (isCodingBot ? process.env.CODING_LLM_API_KEY : process.env.LLM_API_KEY) || '';
+    return (suffix && process.env[`${suffix}_API_KEY`]) || '';
   }
 
   async makeDecision(context: AIDecisionContext): Promise<PlayerAction> {
