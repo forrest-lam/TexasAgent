@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 import { ServerToClientEvents, ClientToServerEvents, AuthResponse } from '@texas-agent/shared';
 import { setupSocketHandlers } from './socket-handler';
 import { signToken, authMiddleware, optionalAuthMiddleware, socketAuthMiddleware } from './auth';
-import { createUser, authenticateUser, getUserById, updateUserLLMConfig, setUserChips, getAllUsers } from './user-store';
+import { createUser, authenticateUser, getUserById, updateUserLLMConfig, setUserChips, getAllUsers, claimDailyBonus } from './user-store';
 import { getRoomByPlayerId } from './room-manager';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -123,17 +123,30 @@ app.post('/api/auth/login', (req, res) => {
     return;
   }
 
+  // Award daily login bonus
+  const dailyBonus = claimDailyBonus(user.id);
+  if (dailyBonus > 0) {
+    // Re-fetch user to get updated chips
+    const updatedUser = getUserById(user.id)!;
+    const token = signToken({ userId: updatedUser.id, username: updatedUser.username });
+    res.json({ token, user: toAuthUser(updatedUser), dailyBonusAwarded: dailyBonus } as AuthResponse);
+    return;
+  }
+
   const token = signToken({ userId: user.id, username: user.username });
   res.json({ token, user: toAuthUser(user) } as AuthResponse);
 });
 
 app.get('/api/auth/me', authMiddleware, (req, res) => {
-  const user = getUserById((req as any).userId);
+  const userId = (req as any).userId;
+  // Award daily login bonus on session restore
+  const dailyBonus = claimDailyBonus(userId);
+  const user = getUserById(userId);
   if (!user) {
     res.status(404).json({ error: 'User not found' });
     return;
   }
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: toAuthUser(user), dailyBonusAwarded: dailyBonus > 0 ? dailyBonus : undefined });
 });
 
 // --- User settings routes ---

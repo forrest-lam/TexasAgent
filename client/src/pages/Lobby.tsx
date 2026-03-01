@@ -21,12 +21,25 @@ export default function Lobby() {
   const navigate = useNavigate();
   const { rooms, currentRoom, isConnected, isSpectating, connect, createRoom, joinRoom, spectateRoom, addAI, startGame, startGameConfirmed, inviteLLMBot, removeLLMBot, llmBots, inviteRuleBot, removeRuleBot, ruleBots, setGameTopupRequired, onlinePlayers } = useLobbyStore();
   const { t } = useI18n();
-  const { user, logout } = useAuthStore();
+  const { user, logout, dailyBonusAwarded, clearDailyBonus } = useAuthStore();
 
   const [showCreate, setShowCreate] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [config, setConfig] = useState<RoomConfig>({ ...DEFAULT_ROOM_CONFIG });
   const [leaderboard, setLeaderboard] = useState<Array<{username: string; chips: number; gamesWon: number; gamesPlayed: number; isLLMBot?: boolean; isRuleBot?: boolean}>>([]);
+  const [showDailyBonus, setShowDailyBonus] = useState(false);
+  const [bonusAmount, setBonusAmount] = useState(0);
+
+  // Show daily bonus toast
+  useEffect(() => {
+    if (dailyBonusAwarded && dailyBonusAwarded > 0) {
+      setBonusAmount(dailyBonusAwarded);
+      setShowDailyBonus(true);
+      clearDailyBonus();
+      const timer = setTimeout(() => setShowDailyBonus(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [dailyBonusAwarded]);
 
   useEffect(() => {
     connect();
@@ -92,6 +105,21 @@ export default function Lobby() {
 
   return (
     <div className="min-h-screen bg-casino-bg relative overflow-hidden">
+      {/* Daily bonus toast */}
+      {showDailyBonus && (
+        <motion.div
+          initial={{ opacity: 0, y: -40 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -40 }}
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-xl bg-gradient-to-r from-yellow-500/90 to-amber-500/90 border border-yellow-400/50 shadow-2xl shadow-yellow-500/20 backdrop-blur-sm flex items-center gap-3"
+        >
+          <span className="text-2xl">🎁</span>
+          <div className="text-sm font-semibold text-black">
+            {t('bonus.dailyLogin', { amount: bonusAmount.toLocaleString() })}
+          </div>
+        </motion.div>
+      )}
+
       {/* Background decoration */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(212,175,55,0.05)_0%,transparent_60%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(27,94,32,0.08)_0%,transparent_60%)]" />

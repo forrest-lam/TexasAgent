@@ -179,6 +179,8 @@ export interface UserProfile {
     gamesWon: number;
     totalEarnings: number;
   };
+  /** ISO date string (YYYY-MM-DD) of last daily bonus claim */
+  lastDailyBonusDate?: string;
   createdAt: number;
 }
 
@@ -187,10 +189,13 @@ export interface AuthResponse {
   user: Omit<UserProfile, 'llmConfig'> & {
     llmConfig?: { apiBaseUrl: string; model: string; hasApiKey: boolean };
   };
+  /** If a daily login bonus was awarded on this login, this field contains the amount */
+  dailyBonusAwarded?: number;
 }
 
 export const BOT_MIN_CHIPS = 2000; // 邀请 bot 时要求的最低筹码
 export const DEFAULT_USER_CHIPS = 2000;
+export const DAILY_BONUS_CHIPS = 1000; // 每日登录奖励筹码
 export const AI_STARTING_CHIPS = 2000;
 export const LLM_BOT_STARTING_CHIPS = 2000;
 

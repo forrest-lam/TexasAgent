@@ -130,6 +130,9 @@ export const locales: Record<Locale, Record<string, string>> = {
     'auth.hasAccount': 'Already have an account?',
     'auth.logout': 'Logout',
     'auth.welcome': 'Welcome',
+
+    // Daily Bonus
+    'bonus.dailyLogin': 'Daily login bonus: +{amount} chips!',
   },
   zh: {
     // App title
@@ -260,6 +263,9 @@ export const locales: Record<Locale, Record<string, string>> = {
     'auth.hasAccount': '已有账号？',
     'auth.logout': '退出登录',
     'auth.welcome': '欢迎',
+
+    // Daily Bonus
+    'bonus.dailyLogin': '每日登录奖励：+{amount} 筹码！',
   },
 };
 

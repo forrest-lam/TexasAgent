@@ -8,6 +8,8 @@ interface AuthState {
   user: AuthResponse['user'] | null;
   isLoading: boolean;
   error: string | null;
+  /** Daily bonus amount awarded on the latest login/session restore, or null if none */
+  dailyBonusAwarded: number | null;
 
   login: (username: string, password: string) => Promise<boolean>;
   register: (username: string, password: string) => Promise<boolean>;
@@ -15,6 +17,7 @@ interface AuthState {
   restoreSession: () => Promise<void>;
   updateUser: (user: AuthResponse['user']) => void;
   clearError: () => void;
+  clearDailyBonus: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -22,9 +25,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: false,
   error: null,
+  dailyBonusAwarded: null,
 
   login: async (username, password) => {
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, dailyBonusAwarded: null });
     try {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
@@ -37,7 +41,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return false;
       }
       localStorage.setItem('token', data.token);
-      set({ token: data.token, user: data.user, isLoading: false });
+      set({
+        token: data.token,
+        user: data.user,
+        isLoading: false,
+        dailyBonusAwarded: data.dailyBonusAwarded ?? null,
+      });
       return true;
     } catch {
       set({ error: 'Network error', isLoading: false });
@@ -46,7 +55,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   register: async (username, password) => {
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, dailyBonusAwarded: null });
     try {
       const res = await fetch(`${API_BASE}/api/auth/register`, {
         method: 'POST',
@@ -69,7 +78,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('token');
-    set({ token: null, user: null });
+    set({ token: null, user: null, dailyBonusAwarded: null });
   },
 
   restoreSession: async () => {
@@ -86,7 +95,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
       const data = await res.json();
-      set({ user: data.user, isLoading: false });
+      set({
+        user: data.user,
+        isLoading: false,
+        dailyBonusAwarded: data.dailyBonusAwarded ?? null,
+      });
     } catch {
       set({ isLoading: false });
     }
@@ -94,4 +107,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   updateUser: (user) => set({ user }),
   clearError: () => set({ error: null }),
+  clearDailyBonus: () => set({ dailyBonusAwarded: null }),
 }));

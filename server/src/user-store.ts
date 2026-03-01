@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
-import { UserProfile, DEFAULT_USER_CHIPS, LLM_BOT_CONFIGS, LLM_BOT_STARTING_CHIPS, RULE_BOT_CONFIGS, RULE_BOT_STARTING_CHIPS } from '@texas-agent/shared';
+import { UserProfile, DEFAULT_USER_CHIPS, DAILY_BONUS_CHIPS, LLM_BOT_CONFIGS, LLM_BOT_STARTING_CHIPS, RULE_BOT_CONFIGS, RULE_BOT_STARTING_CHIPS } from '@texas-agent/shared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -191,6 +191,26 @@ export function setUserChips(id: string, chips: number): boolean {
   u.chips = chips;
   saveUsers();
   return true;
+}
+
+/**
+ * Attempt to claim daily login bonus.
+ * Returns the bonus amount if awarded, or 0 if already claimed today.
+ */
+export function claimDailyBonus(id: string): number {
+  const u = users.get(id);
+  if (!u) return 0;
+  // Bots don't get daily bonus
+  if (u.isLLMBot || u.isRuleBot) return 0;
+
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  if (u.lastDailyBonusDate === today) return 0;
+
+  u.lastDailyBonusDate = today;
+  u.chips += DAILY_BONUS_CHIPS;
+  saveUsers();
+  console.log(`[UserStore] Daily bonus awarded to ${u.username}: +${DAILY_BONUS_CHIPS} chips (now ${u.chips})`);
+  return DAILY_BONUS_CHIPS;
 }
 
 function toProfile(u: StoredUser): UserProfile {
